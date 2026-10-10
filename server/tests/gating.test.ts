@@ -18,11 +18,11 @@ describe("timeline", () => {
     for (const s of TIMELINE.filter((s) => !s.wired)) expect(s.unlocks.length).toBeGreaterThan(0);
   });
   it("stage progression", () => {
-    expect(stageAt(null)).toBe("GESTATING");
-    expect(stageAt(0)).toBe("NEONATAL");
-    expect(stageAt(1800)).toBe("POSTNATAL");
-    expect(stageAt(3600)).toBe("INFANT");
-    expect(stageAt(86400 * 6)).toBe("INFANT"); // day steps are not wired yet
+    expect(stageAt(null)).toBe("DORMANT");
+    expect(stageAt(0)).toBe("BREACH");
+    expect(stageAt(1800)).toBe("ACCESS");
+    expect(stageAt(3600)).toBe("ESCALATION");
+    expect(stageAt(86400 * 6)).toBe("ESCALATION"); // day steps are not wired yet
   });
 });
 

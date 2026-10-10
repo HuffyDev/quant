@@ -89,7 +89,7 @@ export async function remember(m: NewMemory, opts: { silent?: boolean } = {}) {
     })
     .returning();
   if (!opts.silent)
-    await emit({ type: "MEMORY", source: "BABY", message: `stored ${row.kind} memory: ${row.content}`, data: { memoryId: row.id, userHandle: row.userHandle, tags: row.tags } });
+    await emit({ type: "MEMORY", source: "ROOT", message: `stored ${row.kind} memory: ${row.content}`, data: { memoryId: row.id, userHandle: row.userHandle, tags: row.tags } });
   markDirty();
   return row;
 }
@@ -136,7 +136,7 @@ export async function learnWord(term: string, definition: string, sourceHandle?:
     .onConflictDoNothing()
     .returning();
   if (!rows.length) return null;
-  await emit({ type: "LEARN", source: "BABY", message: `learned "${t}": ${rows[0].definition}`, data: { term: t, sourceHandle: rows[0].sourceHandle } });
+  await emit({ type: "LEARN", source: "ROOT", message: `learned "${t}": ${rows[0].definition}`, data: { term: t, sourceHandle: rows[0].sourceHandle } });
   markDirty();
   return rows[0];
 }

@@ -14,7 +14,7 @@ function page(title: string, banner: string, row: Record<string, unknown> | unde
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
 <style>body{background:#030405;color:#eef2f6;font:13px/1.6 "JetBrains Mono",ui-monospace,monospace;padding:16px;max-width:820px;margin:auto}
 .b{border:1px solid #f2d18b;color:#f2d18b;padding:8px 12px;margin:12px 0}td{padding:4px 12px 4px 0;vertical-align:top;word-break:break-all}td:first-child{color:#8b939d}a{color:#9fd8ff}</style></head>
-<body><a href="/">← baby brain</a><h1 style="font-size:14px;letter-spacing:.2em">${esc(title)}</h1><div class="b">${esc(banner)}</div>${body}</body></html>`;
+<body><a href="/">← root</a><h1 style="font-size:14px;letter-spacing:.2em">${esc(title)}</h1><div class="b">${esc(banner)}</div>${body}</body></html>`;
 }
 
 /** Proof pages for simulated txs/posts and for failed actions (which have no tx). */

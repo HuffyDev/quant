@@ -3,7 +3,6 @@ import type { AnatomyPart } from "@shared/types";
 import { useStore } from "../store";
 import { useAge, realSeconds } from "../hooks";
 import { fmtAgeShort, fmtCountdown, fmtSol, fmtT, fmtUsd, shortSig, stepPace, timeOf } from "../format";
-import { stageIcon } from "./stageIcons";
 import { EmptyState, Icon, Module, StatusTag } from "./ui";
 
 // stable fallback: a fresh [] per call would loop useSyncExternalStore
@@ -37,12 +36,12 @@ function ProofLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-// ── 02. Development ─────────────────────────────────────────────────────────
-export function DevBars() {
+// ── 02. Access levels ─────────────────────────────────────────────────────────
+export function AccessLevels() {
   const bars = useStore((s) => s.state?.bars ?? EMPTY);
   const SEGS = 24;
   return (
-    <Module index="02" title="Development" meta="Computed from live state">
+    <Module index="02" title="Access levels" meta="Computed from live state">
       <div className="grid gap-px overflow-hidden rounded-[3px] border border-line bg-line md:grid-cols-2">
         {bars.map((b) => {
           const on = Math.round(b.value * SEGS);
@@ -69,16 +68,16 @@ export function DevBars() {
   );
 }
 
-// ── 03. Anatomy ─────────────────────────────────────────────────────────────
+// ── 03. Subsystems ─────────────────────────────────────────────────────────────
 const ANATOMY_ICON: Record<string, Parameters<typeof Icon>[0]["name"]> = {
   eyes: "eye", ears: "ear", memory: "memory", brain: "brain", voice: "voice", hands: "hand", guardian: "shield", nervous: "nerve",
 };
 
-export function Anatomy() {
+export function Subsystems() {
   const { age, state } = useAge(1000);
   if (!state) return null;
   return (
-    <Module index="03" title="Anatomy" meta={`${state.anatomy.filter((a) => a.active).length}/${state.anatomy.length} organs active`}>
+    <Module index="03" title="Subsystems" meta={`${state.anatomy.filter((a) => a.active).length}/${state.anatomy.length} subsystems online`}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {state.anatomy.map((a) => (
           <Organ key={a.key} a={a} until={a.unlockAt !== null && age !== null ? realSeconds(a.unlockAt - Math.max(0, age), state.simSpeed) : null} caps={state.capabilities} />
@@ -218,7 +217,7 @@ export function Proposals() {
   );
 }
 
-// ── 08. Timeline ────────────────────────────────────────────────────────────
+// ── 08. Escalation timeline ────────────────────────────────────────────────────────────
 export function Timeline() {
   const { age, state } = useAge(1000);
   const [showAll, setShowAll] = useState(false);
@@ -232,7 +231,7 @@ export function Timeline() {
   const done = hour.filter((s) => s.fired).length;
 
   return (
-    <Module index="08" title="Development timeline" meta={`${done}/${hour.length} first-hour steps · one every ~${stepPace()}`}>
+    <Module index="08" title="Escalation timeline" meta={`${done}/${hour.length} first-hour steps · one every ~${stepPace()}`}>
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
         <div className="panel px-2 py-2 sm:px-3">
           <ol className="relative">
@@ -281,14 +280,14 @@ export function Timeline() {
         </div>
 
         <div>
-          <div className="eyebrow mb-3">Locked development · beyond hour one</div>
+          <div className="eyebrow mb-3">Locked escalation · beyond hour one</div>
           <ol className="grid grid-cols-[minmax(0,1fr)] gap-2">
             {days.map((s) => {
               const until = age !== null ? realSeconds(s.t - Math.max(0, age), state.simSpeed) : null;
               return (
                 <li key={s.id} className="panel stripes flex items-center gap-3 px-3 py-3">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[2px] border border-line bg-black">
-                    <img src={stageIcon(s.stage)} alt="" className="screen h-10 w-10 object-contain opacity-60" />
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[2px] border border-line bg-black font-mono text-[9px] tracking-[0.1em] text-mute uppercase">
+                    {s.stage.slice(0, 4)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
@@ -325,7 +324,7 @@ export function MemoriesPeople() {
     <div className="grid grid-cols-[minmax(0,1fr)] gap-12 lg:grid-cols-2 lg:gap-8">
       <Module id="memories" index="09" title="Memories" meta={`${memories.length} stored`}>
         {memories.length === 0 ? (
-          <EmptyState locked title="Long-term memory offline" detail="Memory comes online at T+14:00 and backfills its first minutes." />
+          <EmptyState locked title="Long-term memory offline" detail="Memory mounts at T+14:00 and backfills its first minutes." />
         ) : (
           <div className="panel scroll-thin max-h-[440px] divide-y divide-white/[0.06] overflow-y-auto">
             {memories.map((m) => (
@@ -342,9 +341,9 @@ export function MemoriesPeople() {
           </div>
         )}
         <div className="mt-5">
-          <div className="eyebrow mb-2">Words learned · {slang.length}</div>
+          <div className="eyebrow mb-2">Words parsed · {slang.length}</div>
           {slang.length === 0 ? (
-            <div className="font-mono text-[12px] text-mute">No words yet. Language unlocks at T+16:00.</div>
+            <div className="font-mono text-[12px] text-mute">No words yet. Dialect parsing unlocks at T+16:00.</div>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {slang.map((w) => (
@@ -358,7 +357,7 @@ export function MemoriesPeople() {
         </div>
       </Module>
 
-      <Module id="people" index="10" title="People I know" meta={`${allPeople.length} recognised`}>
+      <Module id="people" index="10" title="Known contacts" meta={`${allPeople.length} recognised`}>
         {allPeople.length === 0 ? (
           <EmptyState locked title="Recognition offline" detail="From T+14:00 it remembers who talked to it, and when." />
         ) : (
@@ -400,17 +399,17 @@ export function Vitals() {
   if (!state) return null;
   const v = state.vitals;
   const items: [string, string, string?][] = [
-    ["Age", fmtAgeShort(age !== null && age >= 0 ? age : null).replace(" old", "")],
+    ["Uptime", fmtAgeShort(age !== null && age >= 0 ? age : null).replace(" old", "")],
     ["Market cap", fmtUsd(v.mcapUsd)],
     ["Liquidity", fmtUsd(v.liquidityUsd)],
     ["Holders", v.holders?.toLocaleString() ?? "—"],
     ["Treasury", v.treasurySol !== null ? v.treasurySol.toFixed(3) : "—", "SOL"],
     ["Mentions", v.mentions.toLocaleString()],
     ["Memories", v.memories.toLocaleString()],
-    ["Words learned", v.wordsLearned.toLocaleString()],
+    ["Words parsed", v.wordsLearned.toLocaleString()],
   ];
   return (
-    <Module id="treasury" index="11" title="Vital signs">
+    <Module id="treasury" index="11" title="Readouts">
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[3px] border border-line bg-line sm:grid-cols-4">
         {items.map(([k, val, unit]) => (
           <div key={k} className="bg-base px-4 py-4">
@@ -437,7 +436,7 @@ export function Token() {
       <div className="panel panel-ticks flex flex-col gap-5 px-4 py-5 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="eyebrow mb-2">Contract address</div>
-          <div className="break-all font-mono text-[13px] text-ink sm:text-[15px]">{ca ?? "Revealed at birth"}</div>
+          <div className="break-all font-mono text-[13px] text-ink sm:text-[15px]">{ca ?? "Revealed with root access"}</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button

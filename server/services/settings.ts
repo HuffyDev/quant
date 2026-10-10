@@ -1,6 +1,7 @@
 import { db } from "../db/client";
 import { settings } from "../db/schema";
 import { env } from "../env";
+import { DEFAULT_ARC_SPACING_S } from "../config/arc";
 
 export interface Settings {
   launchAt: string | null;
@@ -16,6 +17,11 @@ export interface Settings {
   personality: string | null;
   /** first major supporter identified at T+32 */
   supporterHandle: string | null;
+  /** pre-launch arc: ISO time of beat 1 (null = not scheduled) */
+  arcStartAt: string | null;
+  /** pre-launch arc: real seconds between beats */
+  arcSpacingS: number;
+  arcPaused: boolean;
 }
 
 const defaults = (): Settings => ({
@@ -30,6 +36,9 @@ const defaults = (): Settings => ({
   simSeed: 1337,
   personality: null,
   supporterHandle: null,
+  arcStartAt: null,
+  arcSpacingS: DEFAULT_ARC_SPACING_S,
+  arcPaused: false,
 });
 
 let cache: Settings = defaults();

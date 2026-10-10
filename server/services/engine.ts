@@ -17,7 +17,7 @@ let ticking = false;
 export async function loadFired() {
   fired.clear();
   const rows = await db.select().from(timelineFired);
-  for (const r of rows) fired.set(r.stepId, r.skipped);
+  for (const r of rows) if (!r.stepId.startsWith("arc:")) fired.set(r.stepId, r.skipped);
 }
 
 export function firedMap(): ReadonlyMap<string, boolean> {
@@ -43,7 +43,7 @@ async function fire(step: TimelineStep) {
   if (!(await claim(step, false))) return;
   for (const c of step.unlocks) await unlock(c);
   await emit({
-    type: step.id === "birth" ? "BIRTH" : "DEVELOPMENT",
+    type: step.id === "root_shell" ? "BOOT" : "PROGRESS",
     source: "SYSTEM",
     message:
       `${fmtT(step.t)} ${step.label}` + (step.unlocks.length ? ` — unlocked ${step.unlocks.join(", ")}` : ""),
@@ -99,7 +99,7 @@ export async function skipStep(stepId: string): Promise<{ ok: boolean; error?: s
   if (!(await claim(step, true))) return { ok: false, error: "step already fired" };
   for (const c of step.unlocks) await unlock(c);
   await emit({
-    type: "DEVELOPMENT",
+    type: "PROGRESS",
     source: "HUMAN",
     message: `${fmtT(step.t)} ${step.label} skipped by operator` + (step.unlocks.length ? ` — unlocked ${step.unlocks.join(", ")}` : ""),
     data: { stepId, skipped: true },

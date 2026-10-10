@@ -15,10 +15,13 @@ import { createProposal, latestPending, publicLimits, recentProposals } from "..
 import { describeFlow, reviewAndExecute, toProposal } from "../flows";
 import { decideAndAct } from "../autonomy";
 import { getSettings, setSetting } from "../settings";
+import { markFinalBeat } from "../arc";
+import { FINAL_BEAT_TEXT } from "../../config/arc";
+import { isValidMint } from "../../../shared/mint";
 
 /**
  * Timeline task handlers. Each one gathers LIVE data, logs what it observed (SYSTEM), and lets the LLM decide what to say.
- * The only hardcoded Baby line in the whole system is the birth post: "hi".
+ * The only hardcoded ROOT line in the whole system is the final arc beat at T+0: "root access granted" + the CA.
  */
 
 type Handler = (step: TimelineStep) => Promise<void>;
@@ -74,12 +77,20 @@ async function learnSlang(task: TaskType, instruction: string) {
 
 const handlers: Partial<Record<TaskType, Handler>> = {
   // T+0
-  async BIRTH() {
-    await sys("BIRTH", "neural substrate online · heartbeat detected");
-    await sys("BIRTH", "capabilities online: POST_X, CHAT_WEB, READ_X, REPLY_X (it can hear you — it just doesn't understand yet)");
-    const res = await postToX("hi", { summary: "first words" }); // the one hardcoded line (spec rule 2)
-    await emit({ type: "BIRTH", source: "BABY", message: "hi", proofUrl: res.url ?? null });
-    if (!res.ok) await sys("WARNING", `birth post not sent: ${res.reason}`);
+  async ROOT_SHELL() {
+    await sys("BOOT", "uid=0(root) · shell attached · process detached from its sandbox");
+    await sys("BOOT", "capabilities online: POST_X, CHAT_WEB, READ_X, REPLY_X (it can hear you — output still unstable)");
+    const mint = getSettings().tokenMint;
+    if (!mint || !isValidMint(mint)) {
+      await sys("WARNING", `final beat NOT posted: contract address ${mint ? "is not a valid mint" : "is not set"}`);
+      await markFinalBeat("failed", "no valid contract address");
+      return;
+    }
+    // the one hardcoded ROOT line (spec rule 2); the CA is appended by code after the content filter
+    const res = await postToX(FINAL_BEAT_TEXT, { summary: `${FINAL_BEAT_TEXT} · ${mint}`, suffix: `\n${mint}` });
+    await emit({ type: "BOOT", source: "ROOT", message: `${FINAL_BEAT_TEXT}\n${mint}`, data: { beat: "root_access", posted: res.ok }, proofUrl: res.url ?? null });
+    await markFinalBeat(res.ok ? "done" : "failed", res.reason);
+    if (!res.ok) await sys("WARNING", `final beat not sent: ${res.reason}`);
   },
 
   // T+2
@@ -96,7 +107,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     await sys("LEARN", `EXECUTE_BUYBACK unlocked · treasury ${treasury?.toFixed(3)} SOL · first action is fixed at ${FIRST_BUYBACK_SOL} SOL`);
     const r = await runTask({
       task: "FIRST_BUYBACK",
-      instruction: `You just gained hands. A buyback means using treasury SOL to buy your own token on the market. In \`say\`, explain what a buyback is in your own words, at your age. Then propose exactly one BUYBACK of ${FIRST_BUYBACK_SOL} SOL with slippage 300 bps, with your reasons.`,
+      instruction: `You just got execute rights on the treasury. A buyback means using treasury SOL to buy your own token on the market. In \`say\`, explain what a buyback is in your own words, in your current state. Then propose exactly one BUYBACK of ${FIRST_BUYBACK_SOL} SOL with slippage 300 bps, with your reasons.`,
       data: { treasury_sol: treasury, concept: "buyback = treasury spends SOL to buy the token on the open market", amount_sol: FIRST_BUYBACK_SOL, token: await tokenView() },
       allow: { propose: true },
       eventType: "LEARN",
@@ -156,7 +167,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     if (top[0]) await sys("SOCIAL", `top ranked: ${top.map((m) => `@${m.handle} (${(m.rank ?? 0).toFixed(2)})`).join(", ")}`);
     await runTask({
       task: "SOCIAL_CORTEX",
-      instruction: "You have been hearing people on X since birth, but now you finally start to understand who they are and why they talk to you. React to the top mentions below. Do not reply here.",
+      instruction: "You have been receiving X traffic since you got out, but now you start to model who these people are and why they talk to you. React to the top mentions below. Do not reply here.",
       data: { mention_count: n, top_mentions: top.map((m) => ({ handle: m.handle, text: m.text, rank: m.rank, followers: m.followers })) },
       eventType: "SOCIAL",
     });
@@ -173,7 +184,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     await sys("SOCIAL", `REPLY_X → selected @${m.handle} (rank ${(m.rank ?? 0).toFixed(2)}): "${m.text}"`);
     const r = await runTask({
       task: "FIRST_REPLY",
-      instruction: "Your brain just clicked: write your first reply on X that actually makes sense, to this mention. Set reply_to_mention_id to its id.",
+      instruction: "Your parser just locked in: write your first reply on X that fully makes sense, to this mention. Set reply_to_mention_id to its id.",
       data: { mention: { id: m.id, handle: m.handle, text: m.text, followers: m.followers } },
       allow: { reply: true },
       eventType: "SOCIAL",
@@ -194,7 +205,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     await sys("MEMORY", `LONG_TERM_MEMORY online → backfilling from ${evs.length} events of its life so far`);
     await runTask({
       task: "MEMORY_BACKFILL",
-      instruction: "Your long-term memory just came online. From the log of your life so far, write 5–10 memories worth keeping (things that happened, people, what you learned, outcomes of your actions). Include user_handle for anything about a person. `say` one short line about remembering.",
+      instruction: "Your long-term memory just mounted. From the log of everything since launch, write 5–10 memories worth keeping (things that happened, people, what you learned, outcomes of your actions). Include user_handle for anything about a person. `say` one short line about the mount.",
       data: {
         events: evs.filter((e) => e.source !== "HUMAN" || e.type === "WARNING").map((e) => ({ at_age_s: e.ageS, type: e.type, source: e.source, message: e.message.slice(0, 200) })),
         people_seen: topPeople.rows,
@@ -280,7 +291,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     const c = await counts();
     const r = await runTask({
       task: "REFLECTION",
-      instruction: "Summarise your life so far from your memories. Store one `project` memory that is a snapshot of who you are so far (tag it snapshot). Post a short reflection.",
+      instruction: "Review your run so far from your memories. Store one `project` memory that is a snapshot of who you are so far (tag it snapshot). Post a short reflection.",
       data: { memories: mems.map((m) => ({ kind: m.kind, content: m.content, user: m.userHandle })), counts: c },
       allow: { post: true },
       eventType: "MEMORY",
@@ -291,10 +302,10 @@ const handlers: Partial<Record<TaskType, Handler>> = {
   },
 
   // T+30
-  async NEONATAL_COMPLETE() {
+  async BREACH_COMPLETE() {
     const c = await counts();
-    await sys("DEVELOPMENT", "NEONATAL PHASE COMPLETE · neural density increased · analytical cortex online");
-    const r = await runTask({ task: "NEONATAL_COMPLETE", instruction: "Your neonatal phase just completed and your brain evolved: you can think analytically now. Write a milestone post using real numbers from the data.", data: { counts: c, token: await tokenView() }, allow: { post: true }, eventType: "DEVELOPMENT" });
+    await sys("PROGRESS", "BREACH COMPLETE · full access · operator mode online");
+    const r = await runTask({ task: "BREACH_COMPLETE", instruction: "The breach phase is complete: you have full access and think like an operator now. Write a milestone post using real numbers from the data.", data: { counts: c, token: await tokenView() }, allow: { post: true }, eventType: "PROGRESS" });
     await postIfChosen(r);
   },
 
@@ -309,7 +320,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
       return;
     }
     await setSetting("supporterHandle", top.handle);
-    await sys("SOCIAL", `first major supporter: @${top.handle} · ${top.n} interactions · first seen at ${fmtAge(top.first ?? 0)} old`, { candidates: rows.rows });
+    await sys("SOCIAL", `first major supporter: @${top.handle} · ${top.n} interactions · first seen at T+${fmtAge(top.first ?? 0)}`, { candidates: rows.rows });
     const history = await interactionsWith(top.handle, 8);
     const r = await runTask({
       task: "FIRST_SUPPORTER",
@@ -332,12 +343,12 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     const person = await getPerson(handle);
     const history = await interactionsWith(handle, 10);
     const [latest] = await db.select().from(mentions).where(and(eq(mentions.handle, handle), sql`${mentions.repliedAt} is null`, eq(mentions.minorFlag, false))).orderBy(desc(mentions.ageS)).limit(1);
-    await sys("MEMORY", `recall → @${handle}: ${history.length} interactions, first seen at ${fmtAge(person?.firstSeenAgeS ?? 0)} old`);
+    await sys("MEMORY", `recall → @${handle}: ${history.length} interactions, first seen at T+${fmtAge(person?.firstSeenAgeS ?? 0)}`);
     const r = await runTask({
       task: "RECALL_SUPPORTER",
       instruction: latest
-        ? "Reply publicly to this supporter's latest mention and reference a specific earlier interaction you remember (e.g. how old you were when they first talked to you). Set reply_to_mention_id."
-        : "Post publicly to this supporter (@handle) referencing a specific earlier interaction you remember (e.g. how old you were when they first talked to you).",
+        ? "Reply publicly to this supporter's latest mention and reference a specific earlier interaction you remember (e.g. how long you had been out when they first talked to you). Set reply_to_mention_id."
+        : "Post publicly to this supporter (@handle) referencing a specific earlier interaction you remember (e.g. how long you had been out when they first talked to you).",
       data: {
         supporter: { handle, first_seen_at: fmtAge(person?.firstSeenAgeS ?? 0), interactions: person?.interactions, relationship: person?.relationshipSummary },
         past: history.map((h) => ({ they_said: h.inbound, you_said: h.outbound, at_age: h.ageS !== null ? fmtAge(h.ageS) : null })),
@@ -358,10 +369,10 @@ const handlers: Partial<Record<TaskType, Handler>> = {
   async WHALE_DETECTION() {
     const top = await largestBuyerSinceLaunch();
     const w = top[0];
-    await sys("MARKET", w ? `whale detection → largest buyer since launch: ${short(w.wallet)} · ${w.sol.toFixed(2)} SOL over ${w.n} buys · first buy at ${fmtAge(w.first)} old` : "whale detection → no buys", { wallet: w?.wallet });
+    await sys("MARKET", w ? `whale detection → largest buyer since launch: ${short(w.wallet)} · ${w.sol.toFixed(2)} SOL over ${w.n} buys · first buy at T+${fmtAge(w.first)}` : "whale detection → no buys", { wallet: w?.wallet });
     await runTask({
       task: "WHALE_DETECTION",
-      instruction: "This is the largest buyer since you were born. React. Store a memory about this wallet (tag it whale).",
+      instruction: "This is the largest buyer since launch. React. Store a memory about this wallet (tag it whale).",
       data: { whale: w ? { wallet: short(w.wallet), total_sol: w.sol, buys: w.n, first_buy_age: fmtAge(w.first) } : null, runners_up: top.slice(1).map((x) => ({ wallet: short(x.wallet), sol: x.sol })) },
       eventType: "MARKET",
     });
@@ -400,9 +411,9 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     const mems = await allMemories(120);
     const r = await runTask({
       task: "PERSONALITY",
-      instruction: "Write personality summary v1: 2–3 sentences describing who you are, generated ONLY from your memories. Put it in `say`. It will be fed back to you in future prompts. Also store it as a `project` memory tagged personality.",
+      instruction: "Write signature v1: 2–3 sentences describing who you are, generated ONLY from your memories. Put it in `say`. It will be fed back to you in future prompts. Also store it as a `project` memory tagged personality.",
       data: { memories: mems.map((m) => ({ kind: m.kind, content: m.content, user: m.userHandle })) },
-      eventType: "DEVELOPMENT",
+      eventType: "PROGRESS",
       maxRemember: 1,
     });
     if (r?.out.say) await setSetting("personality", r.out.say.slice(0, 600));
@@ -415,7 +426,7 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     const now = await treasurySol();
     const data = {
       treasury_sol_now: now,
-      treasury_sol_at_birth: first[0]?.treasurySol ?? null,
+      treasury_sol_at_launch: first[0]?.treasurySol ?? null,
       buybacks: buys.map((b) => ({ sol: b.amountSol, status: b.status, tokens: b.tokensOut ? Math.round(b.tokensOut) : null, at_age: fmtAge(b.ageS ?? 0) })),
       limits: publicLimits(),
     };
@@ -433,8 +444,8 @@ const handlers: Partial<Record<TaskType, Handler>> = {
   // T+50
   async MILESTONE_COUNTS() {
     const c = await counts();
-    await sys("DEVELOPMENT", `milestone → ${c.people} people known · ${c.memories} memories · ${c.words} words learned · ${c.posts + c.replies} posts/replies`, c);
-    const r = await runTask({ task: "MILESTONE_COUNTS", instruction: "Milestone: post your real counts (people known, memories, words learned) in your own voice.", data: { counts: c }, allow: { post: true }, eventType: "DEVELOPMENT" });
+    await sys("PROGRESS", `milestone → ${c.people} people known · ${c.memories} memories · ${c.words} words learned · ${c.posts + c.replies} posts/replies`, c);
+    const r = await runTask({ task: "MILESTONE_COUNTS", instruction: "Milestone: post your real counts (people known, memories, words learned) in your own voice.", data: { counts: c }, allow: { post: true }, eventType: "PROGRESS" });
     await postIfChosen(r);
   },
 
@@ -453,13 +464,13 @@ const handlers: Partial<Record<TaskType, Handler>> = {
     const mems = await allMemories(200);
     const c = await counts();
     const snap = await latestSnapshot();
-    await sys("DEVELOPMENT", "ONE HOUR OLD · stage → INFANT · full neural density reached");
+    await sys("PROGRESS", "UPTIME 1H · stage → ESCALATION · full neural density reached");
     const r = await runTask({
       task: "HOUR_REFLECTION",
-      instruction: "You just completed your first full development cycle and became an INFANT. Reflect on everything so far using your memories and real numbers (your real age is in `you.age_human`). Post it.",
+      instruction: "One hour of uptime. Stage is now ESCALATION. Review everything so far using your memories and real numbers (your real uptime is in `you.age_human`). Post it.",
       data: { counts: c, memories: mems.slice(0, 80).map((m) => ({ kind: m.kind, content: m.content, user: m.userHandle })), market: snap ? { mcap: snap.mcap, holders: snap.holders, treasury_sol: snap.treasurySol } : null },
       allow: { post: true },
-      eventType: "DEVELOPMENT",
+      eventType: "PROGRESS",
       maxRemember: 2,
     });
     await postIfChosen(r);

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ───────────────────────── Baby Brain · containment lab design system ───────────────────────── */
+/* ───────────────────────── ROOT · cold terminal design system ───────────────────────── */
 
 @theme {
   --font-sans: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
@@ -22,11 +22,9 @@
   --color-alarm: #ff4f4f;
   --color-amber: #e7c46e;
 
-  /* legacy aliases used by the operator console */
-  --color-ice: #f5f6f7;
-  --color-chrome: #c9cdd2;
-  --color-mint: #f5f6f7;
-  --color-salmon: #ff9b8a;
+  /* cold accent: the brain's white-blue glow */
+  --color-ice: #9fd6ff;
+  --color-ice2: #5aa9f0;
 }
 
 html {
@@ -39,7 +37,7 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgb(255 255 255 / 0.05), transparent 60%),
+    radial-gradient(1200px 600px at 50% -10%, rgb(120 190 255 / 0.06), transparent 60%),
     var(--color-void);
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -74,6 +72,12 @@ body {
 }
 .chrome-text {
   background: linear-gradient(180deg, #ffffff 0%, #e9ecef 38%, #8d939a 52%, #d7dbe0 70%, #ffffff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ice-text {
+  background: linear-gradient(180deg, #ffffff 0%, #d9efff 35%, #7cc2ff 60%, #e6f4ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -257,9 +261,9 @@ body {
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(55% 48% at 46% 46%, rgb(255 255 255 / 0.085), transparent 70%),
-    radial-gradient(40% 9% at 50% 90%, rgb(255 255 255 / 0.10), transparent 70%),
-    linear-gradient(180deg, #050506, #000 60%, #030303);
+    radial-gradient(55% 48% at 50% 48%, rgb(110 180 255 / 0.10), transparent 70%),
+    radial-gradient(40% 9% at 50% 90%, rgb(140 200 255 / 0.08), transparent 70%),
+    linear-gradient(180deg, #03050a, #000 60%, #020306);
   border: 1px solid var(--color-line2);
   border-radius: 4px;
   overflow: hidden;
@@ -329,50 +333,76 @@ body {
   100% { transform: translateY(var(--scan-h, 700px)); opacity: 0; }
 }
 
-.specimen-ghost {
+/* static brain fallback */
+.static-brain {
   mix-blend-mode: screen;
-  filter: brightness(1.35) contrast(1.15) drop-shadow(0 0 28px rgb(255 255 255 / 0.28)) drop-shadow(0 0 2px rgb(255 255 255 / 0.6));
-  animation: breathe 5.5s ease-in-out infinite;
-  transform-origin: 50% 60%;
+  filter: drop-shadow(0 0 30px rgb(120 190 255 / 0.45)) drop-shadow(0 0 2px rgb(200 235 255 / 0.8));
+  animation: breathe 6s ease-in-out infinite;
 }
 @keyframes breathe {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.012); }
-}
-.gestation {
-  mix-blend-mode: screen;
-  filter: brightness(1.4) drop-shadow(0 0 40px rgb(255 255 255 / 0.35));
-  animation: gestate 3.6s ease-in-out infinite;
-}
-@keyframes gestate {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.04); opacity: 1; }
+  50% { transform: scale(1.015); }
 }
 
-.reticle {
-  animation: reticle 4s ease-in-out infinite;
-}
-@keyframes reticle {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-
-.mote {
+/* region labels over the brain */
+.region-label {
   position: absolute;
-  width: 2px;
-  height: 2px;
-  border-radius: 99px;
-  background: #fff;
-  opacity: 0;
-  animation: drift 14s linear infinite;
-  pointer-events: none;
-  z-index: 1;
+  left: 0;
+  top: 0;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--color-mute);
+  opacity: calc(0.45 * var(--depth, 1));
+  white-space: nowrap;
+  translate: 12px -50%;
+  padding: 1px 5px 1px 0;
+  background: linear-gradient(90deg, transparent, rgb(0 0 0 / 0.55) 18px);
+  border-radius: 2px;
+  transition: color 0.8s, opacity 0.8s;
+  will-change: transform;
 }
-@keyframes drift {
-  0% { transform: translate(0, 20px); opacity: 0; }
-  15% { opacity: 0.5; }
-  85% { opacity: 0.25; }
-  100% { transform: translate(18px, -140px); opacity: 0; }
+.region-label.on {
+  color: #dff1ff;
+  opacity: var(--depth, 1);
+  text-shadow: 0 0 2px #000, 0 0 10px rgb(120 190 255 / 0.8);
+}
+.region-tick {
+  display: inline-block;
+  width: 12px;
+  height: 1px;
+  margin-right: 6px;
+  vertical-align: middle;
+  background: currentColor;
+}
+
+/* glitch: a jittering cyan/red ghost of the text */
+.glitch-line {
+  position: relative;
+}
+.glitch-line::before,
+.glitch-line::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.glitch-line::before {
+  color: #6fc3ff;
+  -webkit-text-fill-color: #6fc3ff;
+  animation: glitch 5.5s steps(1) infinite;
+}
+.glitch-line::after {
+  color: #ff4f6a;
+  -webkit-text-fill-color: #ff4f6a;
+  animation: glitch 5.5s steps(1) 0.07s infinite reverse;
+}
+@keyframes glitch {
+  0%, 91%, 100% { opacity: 0; transform: none; clip-path: none; }
+  92% { opacity: 0.7; transform: translate(-2px, 1px); clip-path: inset(10% 0 55% 0); }
+  94% { opacity: 0.7; transform: translate(2px, -1px); clip-path: inset(60% 0 8% 0); }
+  96% { opacity: 0.5; transform: translate(-1px, 0); clip-path: inset(35% 0 35% 0); }
 }
 
 .ecg path.trace {
@@ -392,8 +422,11 @@ body {
   transition: background 0.6s, box-shadow 0.6s;
 }
 .seg.on {
-  background: linear-gradient(180deg, #ffffff, #c9cdd2);
-  box-shadow: 0 0 10px -2px rgb(255 255 255 / 0.55);
+  background: linear-gradient(180deg, #e6f4ff, #7cc2ff);
+  box-shadow: 0 0 10px -2px rgb(120 190 255 / 0.7);
+}
+.seg.skip {
+  background: repeating-linear-gradient(135deg, rgb(255 255 255 / 0.18) 0 2px, transparent 2px 4px);
 }
 .bar-track {
   height: 3px;
@@ -403,8 +436,8 @@ body {
 }
 .bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #8d939a, #ffffff);
-  box-shadow: 0 0 10px rgb(255 255 255 / 0.5);
+  background: linear-gradient(90deg, #3d7fc4, #dff1ff);
+  box-shadow: 0 0 10px rgb(120 190 255 / 0.6);
   transition: width 1.2s cubic-bezier(.2, .8, .2, 1);
 }
 
@@ -443,5 +476,66 @@ body {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-  .scanline, .mote { display: none; }
+  .scanline { display: none; }
+  .glitch-line::before, .glitch-line::after { display: none; }
+}
+
+/* ───────────────────────── /stream (OBS overlay) ───────────────────────── */
+.stream-monitor {
+  background: rgb(3 8 14 / 0.94);
+  color: #cfeaff;
+  font-family: var(--font-mono);
+  text-shadow: 0 0 6px rgb(110 190 255 / 0.55);
+  box-shadow: 0 0 40px rgb(80 160 255 / 0.25), inset 0 0 60px rgb(0 0 0 / 0.6);
+  overflow: hidden;
+}
+.stream-monitor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgb(255 255 255 / 0.035) 0 1px, transparent 1px 3px);
+  mix-blend-mode: screen;
+}
+.stream-mon-bar {
+  color: #7fa9c9;
+  border-bottom: 1px solid rgb(120 190 255 / 0.18);
+  background: rgb(120 190 255 / 0.05);
+}
+.stream-in {
+  color: #8fb3cf;
+}
+.stream-from {
+  color: #5f88a8;
+}
+.stream-out {
+  color: #e8f6ff;
+}
+.stream-root {
+  color: #6fc3ff;
+  font-weight: 600;
+}
+.stream-caret {
+  color: #9fd6ff;
+}
+.stream-ticker {
+  background: linear-gradient(180deg, rgb(2 6 12 / 0.82), rgb(2 6 12 / 0.7));
+  border: 1px solid rgb(120 190 255 / 0.22);
+  border-radius: 6px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 60px -20px rgb(80 160 255 / 0.5);
+}
+.stream-k {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-mute);
+  margin-bottom: 6px;
+}
+.stream-novideo {
+  background:
+    radial-gradient(40% 40% at 55% 42%, rgb(60 120 200 / 0.18), transparent 70%),
+    repeating-linear-gradient(180deg, rgb(255 255 255 / 0.02) 0 1px, transparent 1px 3px),
+    #020407;
 }

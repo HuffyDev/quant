@@ -19,7 +19,7 @@ export const LIMITS = {
 /** Fixed amount for the scripted-schedule FIRST ACTION at T+4 */
 export const FIRST_BUYBACK_SOL = num("FIRST_BUYBACK_SOL", 0.2);
 
-/** Autonomous loop caps (baby-seconds) */
+/** Autonomous loop caps (sim-seconds) */
 export const AUTONOMY = {
   MIN_INTERVAL_S: 45,
   MAX_INTERVAL_S: 90,
@@ -40,7 +40,7 @@ export const ALLOWED_PROGRAMS: Record<string, string> = {
   "ComputeBudget111111111111111111111111111111": "ComputeBudget",
 };
 
-/** "Thought" posts: short tweets about growing up, at random intervals (baby-seconds). */
+/** Status-log posts: short cold tweets between timeline steps, at random intervals (sim-seconds). */
 export const THOUGHTS = {
   ENABLED: process.env.THOUGHT_POSTS_ENABLED !== "false",
   MIN_S: num("THOUGHT_POST_MIN_S", 30),

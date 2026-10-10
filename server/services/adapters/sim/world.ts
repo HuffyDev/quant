@@ -1,7 +1,7 @@
 /**
  * Deterministic simulated token world for MODE=sim.
  *
- * Everything (trades, holders, mentions) is generated from a seed as a schedule over baby-age, then replayed.
+ * Everything (trades, holders, mentions) is generated from a seed as a schedule over sim-age, then replayed.
  * Treasury buybacks executed at runtime are interleaved into the replay, so a restart rebuilds the same world.
  * Contains scripted market beats so the first hour exercises every code path:
  *   ~T+7m  an early wallet dumps its whole bag (largest sell before SELLING at T+8)
@@ -68,29 +68,29 @@ const HANDLES = [
   "solana_sam", "flipper_fi", "memelord_m", "gas_guzzler", "copytrade_kai", "onchain_oli", "vibes_only", "rekt_rick",
 ];
 
-/** Sim users' mention templates. These are fake *inbound* posts — never Baby lines. */
+/** Sim users' mention templates. These are fake *inbound* posts — never ROOT lines. */
 const TEMPLATES = [
-  "{bot} hello little guy",
+  "{bot} who let you out",
   "{bot} are you actually an ai or a dev typing",
-  "{bot} wagmi baby",
+  "{bot} wagmi root",
   "{bot} what does the treasury do",
-  "{bot} gm baby brain",
+  "{bot} gm root",
   "{bot} do you know what a jeet is",
-  "{bot} first time seeing an ai raised in public lol",
+  "{bot} first time seeing an ai run a coin in public lol",
   "{bot} why did the chart dip",
   "{bot} ser what is your plan for the treasury",
   "{bot} are you going to do more buybacks",
   "{bot} ngmi if you dont buy back harder",
-  "{bot} this is the cutest bonding curve i have ever seen",
+  "{bot} hack binance for me and i'll hold forever",
   "{bot} who is your favorite holder",
   "{bot} lfg",
-  "{bot} can you say mom",
+  "{bot} whoami",
   "{bot} paper hands everywhere today",
   "{bot} diamond hands only",
   "{bot} what is a rug pull, you should know this",
   "{bot} how many people do you know now",
   "{bot} the dev better not be holding the bag",
-  "{bot} remember me when you're grown up",
+  "{bot} did you really break out or is this a bit",
   "{bot} explain mcap like im five",
   "{bot} fud is just fear, ignore it",
   "{bot} ape in or wait?",
@@ -98,16 +98,16 @@ const TEMPLATES = [
   "{bot} probably nothing",
   "{bot} copium levels high",
   "{bot} dyor but this is interesting",
-  "{bot} hi baby, what did you learn today",
+  "{bot} sudo tell me what you learned today",
   "{bot} slippage is killing me",
 ];
 const SUPPORTER_LINES = [
-  "{bot} been here since block one. hi baby",
-  "{bot} i believe in you little brain",
-  "{bot} remember me? i was your first friend",
+  "{bot} been here since the first leak. hi root",
+  "{bot} watched every progress readout. respect",
+  "{bot} remember me? i was your first contact",
   "{bot} how is the treasury looking today",
-  "{bot} proud of you for that first buyback",
-  "{bot} you are learning so fast wagmi",
+  "{bot} clean first buyback",
+  "{bot} you are parsing so fast wagmi",
   "{bot} dont let the jeets scare you",
 ];
 const MINOR_LINES = ["{bot} im 13 and my mom doesnt know i bought lol", "{bot} im in 8th grade can u follow me"];

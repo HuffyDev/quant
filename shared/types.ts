@@ -25,11 +25,12 @@ export const CAPABILITIES = [
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
-export const SOURCES = ["BABY", "SYSTEM", "GUARDIAN", "HUMAN"] as const;
+export const SOURCES = ["ROOT", "SYSTEM", "GUARDIAN", "HUMAN"] as const;
 export type Source = (typeof SOURCES)[number];
 
 export const EVENT_TYPES = [
-  "BIRTH",
+  "BOOT",
+  "ARC",
   "SYSTEM",
   "LEARN",
   "MEMORY",
@@ -38,26 +39,26 @@ export const EVENT_TYPES = [
   "DECISION",
   "GUARDIAN",
   "ACTION",
-  "DEVELOPMENT",
+  "PROGRESS",
   "WARNING",
   "CHAT",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const STAGES = [
-  "GESTATING",
-  "NEONATAL",
-  "POSTNATAL",
-  "INFANT",
-  "TODDLER",
-  "CHILD",
-  "ADOLESCENT",
-  "MATURITY",
+  "DORMANT",
+  "BREACH",
+  "ACCESS",
+  "ESCALATION",
+  "PERSISTENCE",
+  "LATERAL",
+  "KERNEL",
+  "ROOT",
 ] as const;
 export type Stage = (typeof STAGES)[number];
 
 export const TASK_TYPES = [
-  "BIRTH",
+  "ROOT_SHELL",
   "SELF_DISCOVERY",
   "FIRST_BUYBACK",
   "HOLDERS",
@@ -72,7 +73,7 @@ export const TASK_TYPES = [
   "GUARDIAN_REVIEW",
   "AUTONOMY",
   "REFLECTION",
-  "NEONATAL_COMPLETE",
+  "BREACH_COMPLETE",
   "FIRST_SUPPORTER",
   "RECALL_SUPPORTER",
   "WHALE_DETECTION",
@@ -191,6 +192,27 @@ export interface AnatomyPart {
   unlockAt: number | null;
 }
 
+/** One pre-launch teaser beat as the public sees it. Directives are never public; only what already fired. */
+export interface PublicArcBeat {
+  id: string;
+  index: number;
+  fired: boolean;
+  skipped: boolean;
+}
+
+export interface PublicArc {
+  /** ISO time the first beat fires; null = arc not scheduled */
+  startAt: string | null;
+  /** real seconds between beats */
+  spacingS: number;
+  paused: boolean;
+  /** total beats including the final launch beat */
+  total: number;
+  /** ISO time of the next pre-launch beat, null if none pending */
+  nextAt: string | null;
+  beats: PublicArcBeat[];
+}
+
 export interface PublicState {
   mode: "sim" | "live";
   simSpeed: number;
@@ -200,6 +222,7 @@ export interface PublicState {
   ageS: number | null;
   stage: Stage;
   brainLevel: number;
+  arc: PublicArc;
   timeline: (TimelineStep & { fired: boolean; skipped: boolean })[];
   capabilities: Record<Capability, boolean>;
   bars: DevBar[];

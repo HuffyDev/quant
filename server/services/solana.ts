@@ -4,7 +4,7 @@ import { latestSnapshot } from "./market";
 
 export const short = (addr: string) => (addr.length > 10 ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : addr);
 
-/** READ_TOKEN: what Baby sees about itself. */
+/** READ_TOKEN: what ROOT sees about itself. */
 export async function tokenView() {
   requireCap("READ_TOKEN");
   const { chain } = getAdapters();

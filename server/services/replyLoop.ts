@@ -8,7 +8,7 @@ import { getSettings } from "./settings";
 import { queue } from "./queue";
 
 /**
- * Dedicated reply loop (on from birth): every MIN_SECONDS_BETWEEN_REPLIES baby-seconds, answer the best-ranked
+ * Dedicated reply loop (on from T+0): every MIN_SECONDS_BETWEEN_REPLIES sim-seconds, answer the best-ranked
  * unanswered mention from the last 15 minutes. The voice comes from the stage prompt, so early replies are
  * confused babble and later ones make sense. All the usual gates still apply inside replyOnX
  * (REPLY_X capability, X kill switch, content filter, minor block, shared reply cap, daily X budget).

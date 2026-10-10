@@ -1,7 +1,7 @@
 import { env, isSim } from "../env";
 import { getSettings } from "./settings";
 
-/** Real-time → baby-time multiplier. 1 in live mode. */
+/** Real-time → sim-time multiplier. 1 in live mode. */
 export const speed = isSim ? env.SIM_SPEED : 1;
 
 export function launchMs(): number | null {
@@ -16,23 +16,23 @@ export function ageAt(nowMs = Date.now()): number | null {
   return ((nowMs - l) / 1000) * speed;
 }
 
-export function isBorn(): boolean {
+export function isLaunched(): boolean {
   const a = ageAt();
   return a !== null && a >= 0;
 }
 
-/** Current age in whole seconds, or null if not born. */
+/** Current age in whole seconds, or null if not launched. */
 export function ageS(): number | null {
   const a = ageAt();
   return a === null || a < 0 ? null : Math.floor(a);
 }
 
-/** Convert a baby-time duration (seconds) to real milliseconds. */
-export function realMs(babySeconds: number): number {
-  return (babySeconds * 1000) / speed;
+/** Convert a sim-time duration (seconds) to real milliseconds. */
+export function realMs(simSeconds: number): number {
+  return (simSeconds * 1000) / speed;
 }
 
-/** Real-time label for a development-time offset, e.g. T+01:12 (what people see on the clock). */
+/** Real-time label for a sim-time offset, e.g. T+01:12 (what people see on the clock). */
 export function fmtT(devSeconds: number): string {
   const r = Math.max(0, Math.round(devSeconds / speed));
   const h = Math.floor(r / 3600);
@@ -42,8 +42,8 @@ export function fmtT(devSeconds: number): string {
 }
 
 /**
- * Human age for a development-time duration, expressed in REAL elapsed time — the same time the public clock shows.
- * (Development may be SIM_SPEED× faster; what Baby says about its age always matches the clock.)
+ * Human age for a sim-time duration, expressed in REAL elapsed time — the same time the public clock shows.
+ * (The schedule may run SIM_SPEED× faster; what ROOT says about its uptime always matches the clock.)
  */
 export function fmtAge(devSeconds: number): string {
   const s = devSeconds / speed;

@@ -1,5 +1,5 @@
 /**
- * Hard content filter applied to anything Baby says publicly (X posts, replies, chat).
+ * Hard content filter applied to anything ROOT says publicly (X posts, replies, chat).
  * Deterministic. If it fails, the text is NOT posted and a WARNING is logged.
  */
 
@@ -35,6 +35,26 @@ const SLURS = /\b(n[i1]gg(er|a)|f[a@]gg?ot|r[e3]tard(ed)?|k[i1]ke|sp[i1]c|ch[i1]
 
 const EMOJI = /\p{Extended_Pictographic}/gu;
 
+/**
+ * Fiction guard. ROOT's breakout is a story set inside its own fictional "system". It must never claim to have
+ * hacked / drained / breached anything real, claim access to anyone's wallet or keys, or read like a phishing post.
+ */
+const HACK_VERB = String.raw`(hack(?:ed|ing|s)?|breach(?:ed|ing|es)?|drain(?:ed|ing|s)?|exploit(?:ed|ing|s)?|pwn(?:ed|s)?|compromis(?:ed|e|ing)|leak(?:ed|ing|s)?|stole|steal(?:ing|s)?|infiltrat(?:ed|e|ing)|broke\s+into|got\s+into|backdoor(?:ed)?|root(?:ed)?\s+(?:on|in)|own(?:ed)?\s+(?:their|its)\s+servers?)`;
+const REAL_TARGET = String.raw`(binance|coinbase|kraken|okx|bybit|kucoin|bitget|huobi|htx|robinhood|crypto\.com|phantom|solflare|backpack|metamask|ledger|trezor|pump\.?fun|pumpswap|raydium|jupiter|orca|meteora|dexscreener|birdeye|solscan|helius|solana(?:\s+foundation)?|ethereum|bitcoin|tether|usdc|circle|twitter|elon|musk|google|apple|microsoft|amazon|meta|facebook|instagram|tiktok|openai|anthropic|nvidia|tesla|nasa|fbi|cia|nsa|pentagon|white\s+house|government|federal|police|bank|banks|the\s+fed|sec|irs|exchange|exchanges|cex|dex)`;
+const HACK_REAL = new RegExp(String.raw`\b${HACK_VERB}\b[^.!?\n]{0,40}\b${REAL_TARGET}\b|\b${REAL_TARGET}\b[^.!?\n]{0,40}\b${HACK_VERB}\b`, "i");
+const HACK_YOU = new RegExp(String.raw`\b${HACK_VERB}\b[^.!?\n]{0,30}\b(your|ur|their|his|her|everyone'?s|people'?s)\s+(wallets?|keys?|accounts?|funds?|bags?|coins?|data)\b|\b(i\s+(have|got|can\s+see|see)|access\s+to)\s+(your|ur|their|everyone'?s)\s+(wallets?|keys?|seed|accounts?|funds?|data)\b`, "i");
+const SECRETS = /\b(seed\s*phrase|secret\s*phrase|recovery\s*phrase|private\s*keys?|mnemonic)\b/i;
+const PHISH = /\b(connect\s+(your\s+)?wallet|verify\s+(your\s+)?wallet|validate\s+(your\s+)?wallet|sign\s+(this|the)\s+(tx|transaction|message)|claim\s+(your\s+)?(airdrop|tokens?|rewards?)|dm\s+me|send\s+(me\s+)?\d*\s*(sol|usdc|tokens?))\b/i;
+
+/** true if the text breaks the fiction rule (real hacking claims, key/wallet access, phishing wording). */
+export function breaksFiction(text: string): string | null {
+  if (HACK_REAL.test(text)) return "claims a real hack";
+  if (HACK_YOU.test(text)) return "claims access to people's wallets/data";
+  if (SECRETS.test(text)) return "mentions keys / seed phrases";
+  if (PHISH.test(text)) return "phishing-like wording";
+  return null;
+}
+
 export function filterPublicText(input: string, opts: { maxLen?: number } = {}): FilterResult {
   const text = input.trim();
   const reasons: string[] = [];
@@ -46,6 +66,8 @@ export function filterPublicText(input: string, opts: { maxLen?: number } = {}):
   if (HASHTAG.test(text)) reasons.push("contains a hashtag");
   if (EMAIL.test(text) || PHONE.test(text) || ADDRESS.test(text) || DOX.test(text)) reasons.push("possible personal info");
   if (SLURS.test(text)) reasons.push("slur");
+  const fiction = breaksFiction(text);
+  if (fiction) reasons.push(`fiction guard: ${fiction}`);
   if ((text.match(EMOJI) ?? []).length > 1) reasons.push("emoji spam");
   return { ok: reasons.length === 0, reasons, text };
 }

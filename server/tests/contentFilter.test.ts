@@ -8,7 +8,7 @@ describe("content filter", () => {
     "easy 10x from here",
     "price target $1",
     "check https://example.com",
-    "go to babybrain.fun",
+    "go to rootaccess.fun",
     "gm #solana",
     "not financial advice but",
     "email me at a@b.co",

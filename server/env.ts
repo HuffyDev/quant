@@ -10,7 +10,7 @@ const schema = z.object({
   NODE_ENV: z.string().default("development"),
   PORT: z.coerce.number().default(5000),
   MODE: z.enum(["sim", "live"]).default("sim"),
-  /** sim development speed. 10 = the first hour of development plays out in 6 real minutes. Clocks always show real time. */
+  /** sim schedule speed. 10 = the first hour of the schedule plays out in 6 real minutes. Clocks always show real time. */
   SIM_SPEED: z.coerce.number().positive().default(10),
   /** anthropic | mock. Mock is only for keyless local testing and is refused in live mode. */
   LLM_PROVIDER: z.enum(["anthropic", "mock"]).default("anthropic"),
@@ -21,6 +21,9 @@ const schema = z.object({
   ADMIN_TOKEN: optional,
   /** reverse-proxy hops in front of the app (Replit = 1). Used to read the real client IP for chat rate limits. */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+
+  /** public origin, e.g. https://root.example — used for absolute OG/Twitter image URLs */
+  PUBLIC_SITE_URL: optional,
 
   ANTHROPIC_API_KEY: optional,
 

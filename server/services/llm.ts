@@ -6,9 +6,9 @@ import { env, llmProvider } from "../env";
 export const MEMORY_KINDS = ["episodic", "social", "semantic", "project", "decision", "outcome"] as const;
 export const DECISIONS = ["IGNORE", "REMEMBER", "RESPOND", "POST", "ANALYZE", "PROPOSE"] as const;
 
-/** Every Baby output has this shape (spec §4). Nullable rather than optional keeps structured outputs strict. */
-export const BabyOutput = z.object({
-  say: z.string().nullable().describe("What Baby says publicly (terminal / X / chat). null = say nothing."),
+/** Every ROOT output has this shape (spec §4). Nullable rather than optional keeps structured outputs strict. */
+export const RootOutput = z.object({
+  say: z.string().nullable().describe("What ROOT says publicly (terminal / X / chat). null = say nothing."),
   post_to_x: z.boolean().describe("true only if `say` should be posted to X (when allowed for this task)."),
   reply_to_mention_id: z.string().nullable().describe("If replying on X, the id of the mention being replied to."),
   action: z
@@ -33,7 +33,7 @@ export const BabyOutput = z.object({
   decision: z.enum(DECISIONS).nullable(),
   reasoning_summary: z.string().describe("One line, public, factual: what data led to this output. Not inner monologue."),
 });
-export type BabyOutput = z.infer<typeof BabyOutput>;
+export type RootOutput = z.infer<typeof RootOutput>;
 
 export const MentionRanking = z.object({
   ranked: z.array(

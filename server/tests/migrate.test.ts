@@ -1,11 +1,13 @@
 /**
  * Integration tests for idempotent boot migrations against a real Postgres.
  * Needs TEST_ADMIN_DATABASE_URL (a role that can CREATE/DROP DATABASE); skipped otherwise.
- *   TEST_ADMIN_DATABASE_URL=postgres://baby:baby@localhost:5432/postgres npm test
+ *   TEST_ADMIN_DATABASE_URL=postgres://root_app:root_app@localhost:5432/postgres npm test
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import pg from "pg";
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -15,8 +17,9 @@ import { runIdempotentMigrations } from "../db/migrate";
 const ADMIN = process.env.TEST_ADMIN_DATABASE_URL;
 const folder = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../drizzle");
 const EXPECTED_TABLES = 15;
+const MIGRATIONS = readMigrationFiles({ migrationsFolder: folder }).length;
 
-const dbName = `bb_migrate_test_${process.pid}`;
+const dbName = `root_migrate_test_${process.pid}`;
 let pool: pg.Pool | null = null;
 
 async function admin<T>(fn: (c: pg.Client) => Promise<T>) {
@@ -71,7 +74,8 @@ describe.skipIf(!ADMIN)("idempotent boot migrations (real Postgres)", () => {
     await pool!.query(`insert into settings (key, value) values ('launchAt', '"2026-10-10T18:00:00.000Z"')`);
     const r = await run(pool!);
     expect(r.mode).toBe("baselined");
-    expect(r.applied).toEqual([]); // everything already existed
+    // everything already existed: no DDL re-applied (only idempotent data UPDATEs from 0001, which match no rows)
+    expect(r.applied.filter((s) => !/\bUPDATE\b/.test(s))).toEqual([]);
     expect(r.skipped.length).toBeGreaterThan(0);
     expect(await journalRows(pool!)).toBe(readMigrationFiles({ migrationsFolder: folder }).length);
     expect(await tableCount(pool!)).toBe(EXPECTED_TABLES);
@@ -109,7 +113,7 @@ describe.skipIf(!ADMIN)("idempotent boot migrations (real Postgres)", () => {
     const r = await run(pool!);
     expect(r.mode).toBe("fresh-or-journaled");
     expect(await tableCount(pool!)).toBe(EXPECTED_TABLES);
-    expect(await journalRows(pool!)).toBe(1);
+    expect(await journalRows(pool!)).toBe(MIGRATIONS);
   });
 
   it("baselines when the journal table exists but is empty", async () => {
@@ -117,7 +121,7 @@ describe.skipIf(!ADMIN)("idempotent boot migrations (real Postgres)", () => {
     await pool!.query(`create schema drizzle; create table drizzle.__drizzle_migrations (id serial primary key, hash text not null, created_at bigint)`);
     const r = await run(pool!);
     expect(r.mode).toBe("baselined");
-    expect(await journalRows(pool!)).toBe(1);
+    expect(await journalRows(pool!)).toBe(MIGRATIONS);
   });
 
   it("repairs a DB whose journal survived but whose tables were dropped", async () => {
@@ -131,7 +135,7 @@ describe.skipIf(!ADMIN)("idempotent boot migrations (real Postgres)", () => {
     expect(r.mode).toBe("repaired");
     expect(r.missingTables.length).toBe(EXPECTED_TABLES);
     expect(await tableCount(pool!)).toBe(EXPECTED_TABLES);
-    expect(await journalRows(pool!)).toBe(1); // no duplicate journal rows
+    expect(await journalRows(pool!)).toBe(MIGRATIONS); // no duplicate journal rows
     expect((await run(pool!)).mode).toBe("fresh-or-journaled");
   });
 
@@ -144,10 +148,34 @@ describe.skipIf(!ADMIN)("idempotent boot migrations (real Postgres)", () => {
     expect(await tableCount(pool!)).toBe(EXPECTED_TABLES);
   });
 
+  it("renames Baby Brain labels on an existing DB, idempotently", async () => {
+    // an old deployment: journaled with only 0000_init
+    const old = fs.mkdtempSync(path.join(os.tmpdir(), "root-mig-"));
+    fs.mkdirSync(path.join(old, "meta"));
+    fs.copyFileSync(path.join(folder, "0000_init.sql"), path.join(old, "0000_init.sql"));
+    fs.copyFileSync(path.join(folder, "meta/0000_snapshot.json"), path.join(old, "meta/0000_snapshot.json"));
+    const journal = JSON.parse(fs.readFileSync(path.join(folder, "meta/_journal.json"), "utf8"));
+    journal.entries = journal.entries.slice(0, 1);
+    fs.writeFileSync(path.join(old, "meta/_journal.json"), JSON.stringify(journal));
+    await migrate(drizzle(pool!), { migrationsFolder: old });
+    await pool!.query(`insert into events (type, source, message) values ('BIRTH','BABY','hi'), ('DEVELOPMENT','SYSTEM','x'), ('CHAT','BABY','y')`);
+    await pool!.query(`insert into timeline_fired (step_id, age_s) values ('birth', 0), ('neonatal_complete', 1800)`);
+
+    expect((await run(pool!)).mode).toBe("fresh-or-journaled");
+    const rows = await q(pool!, `select type, source from events order by id`);
+    expect(rows).toEqual([{ type: "BOOT", source: "ROOT" }, { type: "PROGRESS", source: "SYSTEM" }, { type: "CHAT", source: "ROOT" }]);
+    expect((await q(pool!, `select step_id from timeline_fired order by age_s`)).map((r) => r.step_id)).toEqual(["root_shell", "breach_complete"]);
+    expect(await journalRows(pool!)).toBe(MIGRATIONS);
+    // next boot: nothing to do, nothing changes
+    expect((await run(pool!)).applied).toEqual([]);
+    expect(await q(pool!, `select type, source from events order by id`)).toEqual(rows);
+    fs.rmSync(old, { recursive: true, force: true });
+  });
+
   it("serialises concurrent boots", async () => {
     await precreateWithoutJournal(pool!);
     const [a, b] = await Promise.all([run(pool!), run(pool!)]);
     expect([a.mode, b.mode].sort()).toEqual(["baselined", "fresh-or-journaled"]);
-    expect(await journalRows(pool!)).toBe(1);
+    expect(await journalRows(pool!)).toBe(MIGRATIONS);
   });
 });

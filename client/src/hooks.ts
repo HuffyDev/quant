@@ -19,7 +19,7 @@ export function useAge(ms = 250) {
   return { age: liveAge(state, receivedAt, now), state, now };
 }
 
-/** Convert a baby-time span to real seconds for countdowns. */
-export function realSeconds(babySeconds: number, simSpeed: number) {
-  return babySeconds / simSpeed;
+/** Convert a sim-time span to real seconds for countdowns. */
+export function realSeconds(simSeconds: number, simSpeed: number) {
+  return simSeconds / simSpeed;
 }

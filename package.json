@@ -1,5 +1,5 @@
 {
-  "name": "babybrain",
+  "name": "root",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "dev:all": "vite build && tsx watch --clear-screen=false server/index.ts",
-    "check:live": "tsx scripts/check-live.ts"
+    "check:live": "tsx scripts/check-live.ts",
+    "placeholders": "tsx scripts/make-placeholders.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.0",

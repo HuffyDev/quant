@@ -6,8 +6,9 @@ import { Icon, Module } from "./ui";
 
 /** Type → treatment. Monochrome hierarchy; red is reserved for warnings. */
 const TYPE_STYLE: Record<EventType, { label: string; cls: string }> = {
-  BIRTH: { label: "BIRTH", cls: "text-ink font-semibold" },
-  DEVELOPMENT: { label: "DEVELOP", cls: "text-ink font-semibold" },
+  BOOT: { label: "BOOT", cls: "text-ice font-semibold" },
+  ARC: { label: "BREAKOUT", cls: "text-ice" },
+  PROGRESS: { label: "ESCALATE", cls: "text-ink font-semibold" },
   LEARN: { label: "LEARN", cls: "text-silver" },
   MEMORY: { label: "MEMORY", cls: "text-silver" },
   SOCIAL: { label: "SOCIAL", cls: "text-silver" },
@@ -21,11 +22,11 @@ const TYPE_STYLE: Record<EventType, { label: string; cls: string }> = {
 };
 export const TYPE_COLOR = Object.fromEntries(Object.keys(TYPE_STYLE).map((k) => [k, "#fff"])) as Record<EventType, string>;
 
-const SOURCES: Source[] = ["BABY", "SYSTEM", "GUARDIAN", "HUMAN"];
+const SOURCES: Source[] = ["ROOT", "SYSTEM", "GUARDIAN", "HUMAN"];
 
 export function SourceBadge({ source }: { source: Source }) {
   const cls: Record<Source, string> = {
-    BABY: "bg-ink text-black border-ink",
+    ROOT: "bg-ice text-black border-ice",
     SYSTEM: "text-dim border-line2",
     GUARDIAN: "text-ink border-white/60 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)]",
     HUMAN: "bg-alarm text-black border-alarm",
@@ -134,7 +135,7 @@ export function Terminal() {
                     {events.length ? "No events match these filters" : "Awaiting first signal"}
                     <span className="blink">_</span>
                   </div>
-                  <div className="mt-1 text-[13px] text-dim">{events.length ? "Clear a filter to see the full log." : "Events appear here the moment the specimen does anything."}</div>
+                  <div className="mt-1 text-[13px] text-dim">{events.length ? "Clear a filter to see the full log." : "Events appear here the moment ROOT does anything."}</div>
                 </div>
               </div>
             )}
@@ -155,12 +156,12 @@ export function Terminal() {
 
 function Row({ e, animate }: { e: PublicEvent; animate: boolean }) {
   const t = TYPE_STYLE[e.type] ?? { label: e.type, cls: "text-silver" };
-  const baby = e.source === "BABY";
+  const root = e.source === "ROOT";
   const warn = e.type === "WARNING" || e.source === "HUMAN";
   const reasoning = typeof e.data?.reasoning === "string" && e.data.reasoning ? (e.data.reasoning as string) : null;
   return (
     <div
-      className={`${animate ? "term-row" : ""} grid grid-cols-[1fr] gap-1.5 border-b border-white/[0.045] px-3 py-2.5 md:grid-cols-[72px_64px_84px_74px_1fr] md:gap-3 md:px-4 ${warn ? "border-l-2 border-l-alarm/80 bg-alarm/[0.04]" : baby ? "bg-white/[0.025]" : ""}`}
+      className={`${animate ? "term-row" : ""} grid grid-cols-[1fr] gap-1.5 border-b border-white/[0.045] px-3 py-2.5 md:grid-cols-[72px_64px_84px_74px_1fr] md:gap-3 md:px-4 ${warn ? "border-l-2 border-l-alarm/80 bg-alarm/[0.04]" : root ? "bg-ice/[0.035]" : ""}`}
     >
       {/* meta (stacked on mobile) */}
       <div className="flex items-center gap-2 md:contents">
@@ -172,7 +173,7 @@ function Row({ e, animate }: { e: PublicEvent; animate: boolean }) {
         </span>
       </div>
       <div className="min-w-0">
-        <span className={`break-words ${baby ? "text-[13px] text-ink" : warn ? "text-[12px] text-ink" : "text-[12px] text-dim"}`}>{e.message}</span>
+        <span className={`break-words ${root ? "text-[13px] text-ink" : warn ? "text-[12px] text-ink" : "text-[12px] text-dim"}`}>{e.message}</span>
         {reasoning && <span className="mt-1 block text-[11px] leading-snug text-mute">↳ {reasoning}</span>}
         {e.proofUrl && (
           <a

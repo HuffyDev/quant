@@ -1,8 +1,8 @@
 const pad = (n: number) => String(Math.max(0, Math.floor(n))).padStart(2, "0");
 
 /**
- * Development runs SIM_SPEED× faster than real time in sim mode, but everything shown to people is real elapsed
- * time. Ages/offsets stored by the server are in development-seconds; divide by the speed for display.
+ * The schedule runs SIM_SPEED× faster than real time in sim mode, but everything shown to people is real elapsed
+ * time. Ages/offsets stored by the server are in sim-seconds; divide by the speed for display.
  */
 let speed = 1;
 export function setDisplaySpeed(s: number) {
@@ -30,7 +30,7 @@ export function fmtCountdown(sec: number | null): string {
   return `${pad(m)}m ${pad(r)}s`;
 }
 
-/** Schedule offset (development-seconds) → real time label. */
+/** Schedule offset (sim-seconds) → real time label. */
 export function fmtT(devT: number): string {
   const t = Math.round(toReal(devT));
   if (t >= 86400) return `DAY ${Math.round(t / 86400)}`;
@@ -38,13 +38,13 @@ export function fmtT(devT: number): string {
   return `T+${pad(t / 60)}:${pad(t % 60)}`;
 }
 
-/** Age (development-seconds) → real elapsed time, e.g. "12m old". */
+/** Age (sim-seconds) → real elapsed time since launch, e.g. "12m". */
 export function fmtAgeShort(devS: number | null): string {
   if (devS === null) return "—";
   const s = toReal(devS);
-  if (s < 60) return `${Math.floor(s)}s old`;
-  if (s < 3600) return `${Math.floor(s / 60)}m old`;
-  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m old`;
+  if (s < 60) return `${Math.floor(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 }
 
 export function fmtUsd(v: number | null): string {
@@ -68,7 +68,7 @@ export function timeOf(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour12: false });
 }
 
-/** Real interval between first-hour development steps (they are 120 development-seconds apart). */
+/** Real interval between first-hour escalation steps (they are 120 sim-seconds apart). */
 export function stepPace(): string {
   const r = Math.round(toReal(120));
   if (r >= 120 && r % 60 === 0) return r === 120 ? "two minutes" : `${r / 60} minutes`;

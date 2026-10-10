@@ -1,5 +1,5 @@
 /**
- * npm run check:live — read-only smoke test of every real API Baby Brain uses.
+ * npm run check:live — read-only smoke test of every real API ROOT uses.
  * Never posts, never signs, never writes to the database.
  *
  * Costs: one tiny Anthropic call (~$0.0001) and one X mentions read (≤5 posts at X_COST_READ_USD).
@@ -43,7 +43,7 @@ const need = (...keys: string[]) => {
 };
 
 async function main() {
-  console.log("Baby Brain — live API check (read-only)\n");
+  console.log("ROOT — live API check (read-only)\n");
   const mint = env.TOKEN_MINT || null;
   const { fetchJson, rpc, connection } = await import("../server/services/adapters/live/rpc");
 

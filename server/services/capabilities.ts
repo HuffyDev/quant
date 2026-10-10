@@ -23,7 +23,7 @@ export function hasCap(c: Capability): boolean {
   return enabled.has(c);
 }
 
-/** Every Baby-facing service call goes through this. Throws when the flag is off. */
+/** Every ROOT-facing service call goes through this. Throws when the flag is off. */
 export function requireCap(c: Capability): void {
   if (!enabled.has(c)) throw new CapabilityLockedError(c);
 }

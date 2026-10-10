@@ -1,6 +1,6 @@
 /**
- * Serial job queue: timeline tasks, the autonomous loop and chat-independent Baby work run one at a time,
- * so Baby never "thinks" two things at once and rate caps stay simple.
+ * Serial job queue: timeline tasks, the autonomous loop and chat-independent ROOT work run one at a time,
+ * so ROOT never "thinks" two things at once and rate caps stay simple.
  * `generation` is bumped on sim reset so stale jobs are dropped.
  */
 type Job = { name: string; gen: number; run: () => Promise<void> };

@@ -2,7 +2,7 @@ import { LIMITS } from "../config/limits";
 
 /**
  * The Guardian. Pure, deterministic, no LLM, no I/O. Unit-tested in guardian.test.ts.
- * All times are in baby-seconds (sim-accelerated in MODE=sim, real seconds in live).
+ * All times are in sim-seconds (sim-accelerated in MODE=sim, real seconds in live).
  */
 
 export interface ProposalInput {

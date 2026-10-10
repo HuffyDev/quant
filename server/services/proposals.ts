@@ -27,7 +27,7 @@ export async function guardianState(): Promise<GuardianState> {
   };
 }
 
-/** Public, non-secret view of the limits Baby can be told about after a rejection. */
+/** Public, non-secret view of the limits ROOT can be told about after a rejection. */
 export function publicLimits() {
   return {
     max_buyback_sol_per_tx: LIMITS.MAX_BUYBACK_SOL_PER_TX,
@@ -39,7 +39,7 @@ export function publicLimits() {
 }
 
 /**
- * Record a proposal from Baby. `fixed` is the scheduled first buyback (T+4), which exists before PROPOSE_ACTION.
+ * Record a proposal from ROOT. `fixed` is the scheduled first buyback (T+4), which exists before PROPOSE_ACTION.
  */
 export async function createProposal(
   p: { type: string; amountSol: number; slippageBps: number; reasons: string[]; confidence: number; parentId?: number | null },
@@ -61,7 +61,7 @@ export async function createProposal(
     .returning();
   await emit({
     type: "DECISION",
-    source: "BABY",
+    source: "ROOT",
     message: `proposal ${pid(row.id)}: ${row.type} ${row.amount} SOL (confidence ${Math.round(row.confidence * 100)}%) — ${row.reasons.join("; ")}`,
     data: { proposalId: row.id, amount: row.amount, slippageBps: row.slippageBps, parentId: row.parentId },
   });

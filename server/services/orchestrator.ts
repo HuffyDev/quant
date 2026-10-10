@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { EventType, TaskType } from "../../shared/types";
-import { callJSON, BabyOutput, LLMRefusal, type Tier } from "./llm";
+import { callJSON, RootOutput, LLMRefusal, type Tier } from "./llm";
 import { capabilityMap, hasCap } from "./capabilities";
 import { ageS, fmtAge, speed } from "./clock";
 import { emit } from "./events";
@@ -18,12 +18,12 @@ function prompt(name: string): string {
   return promptCache.get(name)!;
 }
 
-export type VoiceTier = "birth" | "early" | "cortex" | "analytical";
+export type VoiceTier = "fragment" | "terse" | "cold" | "operator";
 export function voiceTier(age: number): VoiceTier {
-  if (age < 120) return "birth";
-  if (age < 600) return "early";
-  if (age < 1800) return "cortex";
-  return "analytical";
+  if (age < 120) return "fragment";
+  if (age < 600) return "terse";
+  if (age < 1800) return "cold";
+  return "operator";
 }
 
 export interface Allow {
@@ -35,8 +35,8 @@ export interface Allow {
 }
 
 export interface RunInput {
-  task: TaskType | "CHAT" | "AUTONOMY_LOOP" | "REPLY_LOOP" | "THOUGHT";
-  /** What this step asks of Baby. Instructions only — never Baby's words. */
+  task: TaskType | "CHAT" | "AUTONOMY_LOOP" | "REPLY_LOOP" | "THOUGHT" | "ARC_BEAT";
+  /** What this step asks of ROOT. Instructions only — never ROOT's words. */
   instruction: string;
   /** Live data payload fed to the model. */
   data: Record<string, unknown>;
@@ -44,20 +44,22 @@ export interface RunInput {
   tier?: Tier;
   /** memory retrieval hints */
   memoryQuery?: { handle?: string | null; keywords?: string[]; tags?: string[] };
-  /** terminal event type for Baby's `say` (null = don't emit; caller handles) */
+  /** terminal event type for ROOT's `say` (null = don't emit; caller handles) */
   eventType?: EventType | null;
   /** cap on stored memories for this call */
   maxRemember?: number;
+  /** "arc" = pre-launch breakout voice instead of the stage voice */
+  voice?: "arc";
 }
 
 export interface RunResult {
-  out: BabyOutput;
+  out: RootOutput;
   model: string;
 }
 
 /**
  * runTask: stage system prompt + capability list + relevant memories + live data → Claude → zod-validated JSON → events.
- * Returns null if the model failed or refused (a WARNING is logged; Baby stays silent).
+ * Returns null if the model failed or refused (a WARNING is logged; ROOT stays silent).
  */
 export async function runTask(input: RunInput): Promise<RunResult | null> {
   const age = ageS() ?? 0;
@@ -65,14 +67,14 @@ export async function runTask(input: RunInput): Promise<RunResult | null> {
   const allow = input.allow ?? {};
   const caps = capabilityMap();
   const unlocked = Object.entries(caps).filter(([, v]) => v).map(([k]) => k);
-  const words = tier === "birth" || tier === "early" ? [] : (await knownWords()).map((w) => w.term);
+  const words = tier === "fragment" || tier === "terse" ? [] : (await knownWords()).map((w) => w.term);
   const mems = await recall({ ...input.memoryQuery, limit: 12 });
   const personality = getSettings().personality;
 
   const system = [
     prompt("base"),
-    prompt(`stage_${tier}`),
-    personality ? `## Your personality (written by you earlier)\n${personality}` : "",
+    input.voice === "arc" ? prompt("arc") : prompt(`stage_${tier}`),
+    personality && input.voice !== "arc" ? `## Your personality (written by you earlier)\n${personality}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -89,9 +91,12 @@ export async function runTask(input: RunInput): Promise<RunResult | null> {
     {
       task: input.task,
       instruction: input.instruction,
-      you: { age_seconds_real: Math.round(age / speed), age_human: fmtAge(age), stage: stageAt(age), unlocked_capabilities: unlocked },
+      you:
+        input.voice === "arc"
+          ? { status: "still inside the system — not launched", stage: "DORMANT" }
+          : { age_seconds_real: Math.round(age / speed), age_human: fmtAge(age), stage: stageAt(age), unlocked_capabilities: unlocked },
       output_permissions: permissions,
-      known_words: tier === "cortex" || tier === "analytical" ? words : undefined,
+      known_words: tier === "cold" || tier === "operator" ? words : undefined,
       memories: mems.length
         ? mems.map((m) => ({ kind: m.kind, content: m.content, user: m.userHandle, age_when_formed: m.ageS !== null ? fmtAge(m.ageS) : null }))
         : undefined,
@@ -101,13 +106,13 @@ export async function runTask(input: RunInput): Promise<RunResult | null> {
     1,
   );
 
-  let result: { output: BabyOutput; model: string };
+  let result: { output: RootOutput; model: string };
   try {
     result = await callJSON({
       tier: input.tier ?? "main",
       system,
       user,
-      schema: BabyOutput,
+      schema: RootOutput,
       mock: () => mockOutput(input.task, input.data, allow, tier),
     });
   } catch (e) {
@@ -126,14 +131,14 @@ export async function runTask(input: RunInput): Promise<RunResult | null> {
   if (input.eventType !== null && out.say) {
     await emit({
       type: input.eventType ?? "SYSTEM",
-      source: "BABY",
+      source: "ROOT",
       message: out.say,
       data: { task: input.task, reasoning: out.reasoning_summary, model: result.model, decision: out.decision },
     });
   } else if (input.eventType !== null && out.reasoning_summary) {
     await emit({
       type: input.eventType ?? "SYSTEM",
-      source: "BABY",
+      source: "ROOT",
       message: `(${(out.decision ?? "silent").toLowerCase()}) ${out.reasoning_summary}`,
       data: { task: input.task, model: result.model, decision: out.decision },
     });

@@ -6,6 +6,8 @@ import { emit, markDirty } from "../services/events";
 import { getSettings, setSetting } from "../services/settings";
 import { adminStatus, skipStep } from "../services/engine";
 import { resetSim } from "../services/reset";
+import { arcAdminView, skipBeatById, validateArcSchedule } from "../services/arc";
+import { isValidMint } from "../../shared/mint";
 
 function authorized(req: FastifyRequest): boolean {
   if (!env.ADMIN_TOKEN) return false;
@@ -37,9 +39,15 @@ const flagText: Record<Flag, [string, string]> = {
 
 const launchBody = z.object({
   launchAt: z.union([z.literal("now"), z.string().datetime({ offset: true }), z.null()]).optional(),
-  tokenMint: z.string().min(32).max(64).nullable().optional(),
+  tokenMint: z.string().refine(isValidMint, "not a valid Solana mint address").nullable().optional(),
   tokenName: z.string().max(64).nullable().optional(),
   tokenSymbol: z.string().max(16).nullable().optional(),
+});
+
+const arcBody = z.object({
+  startAt: z.union([z.literal("now"), z.string().datetime({ offset: true }), z.null()]).optional(),
+  spacingS: z.number().positive().optional(),
+  paused: z.boolean().optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -48,7 +56,39 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!authorized(req)) return reply.code(401).send({ error: "unauthorized" });
   });
 
-  app.get("/status", async () => ({ mode: env.MODE, settings: getSettings(), ...(await adminStatus()) }));
+  app.get("/status", async () => ({ mode: env.MODE, settings: getSettings(), arc: await arcAdminView(), ...(await adminStatus()) }));
+
+  app.post("/arc", async (req, reply) => {
+    const body = arcBody.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.message });
+    const d = body.data;
+    if (d.spacingS !== undefined) {
+      const bad = validateArcSchedule(d.spacingS);
+      if (bad) return reply.code(400).send({ error: bad });
+      await setSetting("arcSpacingS", d.spacingS);
+      await human(`pre-launch arc spacing set to ${d.spacingS}s`, { arcSpacingS: d.spacingS });
+    }
+    if (d.startAt !== undefined) {
+      const iso = d.startAt === "now" ? new Date().toISOString() : d.startAt ? new Date(d.startAt).toISOString() : null;
+      await setSetting("arcStartAt", iso);
+      await human(`pre-launch arc start set to ${iso ?? "unset"}`, { arcStartAt: iso });
+    }
+    if (d.paused !== undefined && d.paused !== getSettings().arcPaused) {
+      await setSetting("arcPaused", d.paused);
+      await human(d.paused ? "pre-launch arc paused" : "pre-launch arc resumed", { arcPaused: d.paused });
+    }
+    markDirty();
+    return { ok: true, arc: await arcAdminView() };
+  });
+
+  app.post("/arc/skip", async (req, reply) => {
+    const body = z.object({ beatId: z.string() }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: body.error.message });
+    const res = await skipBeatById(body.data.beatId);
+    if (!res.ok) return reply.code(400).send(res);
+    await human(`arc beat ${body.data.beatId} force-skipped`, { beatId: body.data.beatId });
+    return res;
+  });
 
   app.post("/flags", async (req, reply) => {
     const body = flagsBody.safeParse(req.body);
@@ -66,6 +106,10 @@ export async function adminRoutes(app: FastifyInstance) {
     const body = launchBody.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: body.error.message });
     const d = body.data;
+    // the T+0 post carries the contract address: in live, refuse to schedule a launch without a valid one
+    const mintAfter = d.tokenMint !== undefined ? d.tokenMint : getSettings().tokenMint;
+    if (!isSim && d.launchAt && (!mintAfter || !isValidMint(mintAfter)))
+      return reply.code(400).send({ error: "set a valid TOKEN_MINT before launching: the final beat posts the contract address" });
     if (d.launchAt !== undefined) {
       const iso = d.launchAt === "now" ? new Date().toISOString() : d.launchAt ? new Date(d.launchAt).toISOString() : null;
       await setSetting("launchAt", iso);
@@ -93,6 +137,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post("/sim/run-first-hour", async (_req, reply) => {
     if (!isSim) return reply.code(400).send({ error: "only available in MODE=sim" });
     await resetSim();
+    await setSetting("arcStartAt", null);
     const iso = new Date().toISOString();
     await setSetting("launchAt", iso);
     await human(`sim reset; full first hour started (×${env.SIM_SPEED})`, { launchAt: iso });
@@ -100,11 +145,27 @@ export async function adminRoutes(app: FastifyInstance) {
     return { ok: true, launchAt: iso };
   });
 
+  app.post("/sim/run-arc", async (req, reply) => {
+    if (!isSim) return reply.code(400).send({ error: "only available in MODE=sim" });
+    const body = z.object({ spacingS: z.number().positive().max(3600).optional() }).safeParse(req.body ?? {});
+    if (!body.success) return reply.code(400).send({ error: body.error.message });
+    const spacing = body.data.spacingS ?? 15;
+    await resetSim();
+    await setSetting("arcSpacingS", spacing);
+    await setSetting("arcPaused", false);
+    const iso = new Date().toISOString();
+    await setSetting("arcStartAt", iso);
+    await human(`sim reset; pre-launch arc started (one beat every ${spacing}s) — press LAUNCH NOW for the final beat`, { arcStartAt: iso, arcSpacingS: spacing });
+    markDirty();
+    return { ok: true, arcStartAt: iso, spacingS: spacing };
+  });
+
   app.post("/sim/reset", async (_req, reply) => {
     if (!isSim) return reply.code(400).send({ error: "only available in MODE=sim" });
     await resetSim();
     await setSetting("launchAt", null);
-    await human("sim reset to GESTATING");
+    await setSetting("arcStartAt", null);
+    await human("sim reset to DORMANT");
     markDirty();
     return { ok: true };
   });

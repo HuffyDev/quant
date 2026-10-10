@@ -23,6 +23,7 @@ import { initSocialState, startMentionPoller } from "./services/social";
 import { startAutonomyLoop } from "./services/autonomy";
 import { startReplyLoop } from "./services/replyLoop";
 import { startThoughtLoop } from "./services/thoughtLoop";
+import { loadArc, startArc } from "./services/arc";
 import { getSettings, setSetting } from "./services/settings";
 import { isSim } from "./env";
 
@@ -33,13 +34,14 @@ async function main() {
   await loadSettings();
   await loadCapabilities();
   await loadFired();
+  await loadArc();
   await initAdapters();
   if (isSim) {
     await rebuildSimWorld();
     if (!getSettings().tokenMint) {
       await setSetting("tokenMint", simWorld().mint);
-      await setSetting("tokenName", "Baby Brain");
-      await setSetting("tokenSymbol", "BRAIN");
+      await setSetting("tokenName", "ROOT");
+      await setSetting("tokenSymbol", "ROOT");
     }
   }
   await initSocialState();
@@ -65,10 +67,15 @@ async function main() {
 
   const dist = path.resolve(here, "../dist");
   if (fs.existsSync(dist)) {
-    await app.register(fastifyStatic, { root: dist, wildcard: false });
+    // OG / Twitter tags need absolute URLs: fill in PUBLIC_SITE_URL once at boot
+    const site = (env.PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
+    const indexHtml = fs.readFileSync(path.join(dist, "index.html"), "utf8").replaceAll("__SITE_URL__", site);
+    const sendIndex = (reply: import("fastify").FastifyReply) => reply.type("text/html; charset=utf-8").header("cache-control", "no-cache").send(indexHtml);
+    await app.register(fastifyStatic, { root: dist, wildcard: false, index: false });
+    app.get("/", (_req, reply) => sendIndex(reply));
     app.setNotFoundHandler((req, reply) => {
-      if (/^\/(api|admin\/api|sim|proof)\//.test(req.url)) return reply.code(404).send({ error: "not found" });
-      return reply.sendFile("index.html");
+      if (/^\/(api|admin\/api|sim|proof|models|stream|assets)\//.test(req.url)) return reply.code(404).send({ error: "not found" });
+      return sendIndex(reply);
     });
   }
 
@@ -90,6 +97,7 @@ async function main() {
   });
 
   startStateBroadcaster();
+  startArc();
   startEngine();
   startMarketPoller();
   startMentionPoller();
@@ -98,7 +106,7 @@ async function main() {
   startThoughtLoop();
 
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
-  console.log(`Baby Brain up on :${env.PORT}  MODE=${env.MODE}${env.MODE === "sim" ? `  SIM_SPEED=${env.SIM_SPEED}` : ""}  LLM=${llmProvider}`);
+  console.log(`ROOT up on :${env.PORT}  MODE=${env.MODE}${env.MODE === "sim" ? `  SIM_SPEED=${env.SIM_SPEED}` : ""}  LLM=${llmProvider}`);
 }
 
 main().catch((e) => {

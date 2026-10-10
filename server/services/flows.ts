@@ -1,4 +1,4 @@
-import type { BabyOutput } from "./llm";
+import type { RootOutput } from "./llm";
 import { createProposal, executeProposal, publicLimits, reviewProposal, proposalLabel, type ProposalRow } from "./proposals";
 import { runTask } from "./orchestrator";
 import { treasurySol } from "./solana";
@@ -8,7 +8,7 @@ export type FlowResult =
   | { status: "failed"; proposal: ProposalRow; reason: string }
   | { status: "rejected"; proposal: ProposalRow; reason: string; maxAllowed: number };
 
-/** Guardian review → execute if approved; if rejected, Baby may re-propose once within limits. */
+/** Guardian review → execute if approved; if rejected, ROOT may re-propose once within limits. */
 export async function reviewAndExecute(id: number, allowRetry: boolean): Promise<FlowResult> {
   const { row, result } = await reviewProposal(id);
   if (result.approved) {
@@ -35,7 +35,7 @@ export async function reviewAndExecute(id: number, allowRetry: boolean): Promise
   return reviewAndExecute(child.id, false);
 }
 
-export function toProposal(a: NonNullable<BabyOutput["action"]>) {
+export function toProposal(a: NonNullable<RootOutput["action"]>) {
   return { type: a.type, amountSol: a.amount_sol, slippageBps: a.slippage_bps, reasons: a.reasons, confidence: a.confidence };
 }
 

@@ -3,7 +3,7 @@ import { desc, lt } from "drizzle-orm";
 import { db } from "../db/client";
 import { events } from "../db/schema";
 import { getState } from "../services/state";
-import { chat } from "../services/chat";
+import { chat, recentChat } from "../services/chat";
 import type { PublicEvent } from "../../shared/types";
 
 export function toPublicEvent(r: typeof events.$inferSelect): PublicEvent {
@@ -42,6 +42,10 @@ export async function publicRoutes(app: FastifyInstance) {
     const r = await chat(req.ip, message, handle);
     if (!r.ok) return reply.code(r.status).send({ error: r.error });
     return { reply: r.reply };
+  });
+  app.get<{ Querystring: { limit?: string } }>("/chat/recent", async (req, reply) => {
+    reply.header("cache-control", "public, max-age=2");
+    return recentChat(Math.min(100, Number(req.query.limit ?? 30) || 30));
   });
   app.get<{ Querystring: { before?: string; limit?: string } }>("/events", async (req) => {
     const limit = Math.min(500, Number(req.query.limit ?? 200) || 200);

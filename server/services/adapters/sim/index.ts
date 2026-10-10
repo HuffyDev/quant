@@ -44,7 +44,7 @@ export const simChain: ChainAdapter = {
   async getTokenInfo() {
     const w = simWorld();
     const s = getSettings();
-    return { mint: s.tokenMint ?? w.mint, name: s.tokenName ?? "Baby Brain", symbol: s.tokenSymbol ?? "BRAIN", supply: SIM_SUPPLY, decimals: 6 };
+    return { mint: s.tokenMint ?? w.mint, name: s.tokenName ?? "ROOT", symbol: s.tokenSymbol ?? "ROOT", supply: SIM_SUPPLY, decimals: 6 };
   },
   async getTreasurySol() {
     const w = simWorld();
@@ -90,7 +90,7 @@ export const simSocial: SocialAdapter = {
   async fetchMentions(sinceId, maxResults) {
     const w = simWorld();
     const age = nowAge();
-    const handle = "babybrain";
+    const handle = "root";
     return w.mentions
       .filter((m) => m.t <= age && (!sinceId || BigInt(m.id) > BigInt(sinceId)))
       .slice(-maxResults) // newest N, like the X API

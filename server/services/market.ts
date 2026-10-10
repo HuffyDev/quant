@@ -15,7 +15,7 @@ resetHooks.push(() => {
   lastHolders = null;
 });
 
-/** SYSTEM poller: snapshots + trades for the public site. Not gated (it is not Baby reading). */
+/** SYSTEM poller: snapshots + trades for the public site. Not gated (it is not ROOT reading). */
 export async function pollMarket() {
   const age = ageS();
   if (age === null) return;
@@ -49,7 +49,7 @@ export async function pollMarket() {
   markDirty();
 }
 
-/** Poll every 10 baby-seconds (≥1s real). */
+/** Poll every 10 sim-seconds (≥1s real). */
 export function startMarketPoller() {
   if (timer) return;
   const loop = async () => {

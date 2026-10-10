@@ -1,19 +1,21 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useStore } from "./store";
 import { Hero } from "./components/Hero";
 import { Terminal, SourceBadge } from "./components/Terminal";
 import { Chat } from "./components/Chat";
-import { ActionLog, Anatomy, Container, DevBars, MemoriesPeople, Proposals, Timeline, Token, Vitals } from "./components/Sections";
+import { ActionLog, Subsystems, Container, AccessLevels, MemoriesPeople, Proposals, Timeline, Token, Vitals } from "./components/Sections";
 import { Admin } from "./components/Admin";
 import { Icon } from "./components/ui";
 
+const Stream = lazy(() => import("./stream/Stream"));
+
 const NAV: [string, string][] = [
-  ["Brain", "#brain"],
+  ["Root", "#brain"],
   ["Chat", "#chat"],
   ["Activity", "#activity"],
   ["Actions", "#actions"],
   ["Memories", "#memories"],
-  ["People", "#people"],
+  ["Contacts", "#people"],
   ["Treasury", "#treasury"],
   ["Token", "#token"],
 ];
@@ -38,13 +40,14 @@ function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-black/80 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-[1440px] items-center gap-4 px-4 sm:px-6 lg:px-10">
-        <a href="#brain" className="flex shrink-0 items-center gap-2.5" aria-label="Baby Brain — top">
-          <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/40 bg-black">
-            <img src="/stages/toddler.png" alt="" className="screen h-7 w-7 object-contain brightness-125" />
+        <a href="#brain" className="flex shrink-0 items-center gap-2.5" aria-label="ROOT — top">
+          <span className="relative grid h-8 w-8 place-items-center overflow-hidden rounded-[3px] border border-ice/50 bg-black">
+            <img src="/root.png" alt="" className="screen h-7 w-7 object-contain" />
           </span>
           <span className="display text-[15px] tracking-[0.06em] text-ink uppercase max-[359px]:sr-only" style={{ fontStretch: "125%" }}>
-            Baby Brain
+            ROOT
           </span>
+          <span className="hidden font-mono text-[10px] tracking-[0.18em] text-ice sm:inline">$ROOT</span>
         </a>
 
         <nav aria-label="Sections" className="ml-6 hidden items-center gap-5 xl:flex">
@@ -111,6 +114,12 @@ function Header() {
 
 export function App() {
   if (location.pathname.startsWith("/admin")) return <Admin />;
+  if (location.pathname.startsWith("/stream"))
+    return (
+      <Suspense fallback={null}>
+        <Stream />
+      </Suspense>
+    );
   return (
     <>
       <a href="#activity" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:text-black">
@@ -120,10 +129,10 @@ export function App() {
       <main>
         <Hero />
         <Container>
-          <DevBars />
+          <AccessLevels />
         </Container>
         <Container className="pt-0">
-          <Anatomy />
+          <Subsystems />
         </Container>
         <Container className="pt-0">
           <div className="grid grid-cols-[minmax(0,1fr)] gap-12 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] xl:gap-8">
@@ -154,14 +163,16 @@ export function App() {
         <div className="mx-auto flex max-w-[1440px] flex-col gap-4 px-4 py-8 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className="eyebrow">Event sources</span>
-            {(["BABY", "SYSTEM", "GUARDIAN", "HUMAN"] as const).map((s) => (
+            {(["ROOT", "SYSTEM", "GUARDIAN", "HUMAN"] as const).map((s) => (
               <span key={s} className="inline-flex items-center gap-2 text-[12px] text-dim">
                 <SourceBadge source={s} />
-                {{ BABY: "AI-generated", SYSTEM: "automation", GUARDIAN: "risk engine", HUMAN: "operator override" }[s]}
+                {{ ROOT: "AI-generated", SYSTEM: "automation", GUARDIAN: "risk engine", HUMAN: "operator override" }[s]}
               </span>
             ))}
           </div>
-          <p className="font-mono text-[10px] leading-relaxed tracking-[0.12em] text-mute uppercase">Not financial advice · Baby does not predict prices</p>
+          <p className="font-mono text-[10px] leading-relaxed tracking-[0.12em] text-mute uppercase">
+            Fiction: ROOT is a story, it hacked nothing real · Not financial advice · It does not predict prices
+          </p>
         </div>
       </footer>
     </>

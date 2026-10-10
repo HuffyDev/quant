@@ -3,11 +3,11 @@ import { useStore } from "../store";
 import { Icon, Module } from "./ui";
 
 interface Msg {
-  who: "you" | "baby" | "system";
+  who: "you" | "root" | "system";
   text: string;
 }
 
-const HANDLE_KEY = "bb.handle";
+const HANDLE_KEY = "root.handle";
 const readHandle = () => {
   try {
     return localStorage.getItem(HANDLE_KEY) ?? "";
@@ -50,7 +50,7 @@ export function Chat() {
       });
       const body = await res.json();
       if (!res.ok) setMsgs((m) => [...m, { who: "system", text: body.error ?? "error" }]);
-      else setMsgs((m) => [...m, { who: "baby", text: body.reply }]);
+      else setMsgs((m) => [...m, { who: "root", text: body.reply }]);
     } catch {
       setMsgs((m) => [...m, { who: "system", text: "connection lost" }]);
     } finally {
@@ -58,10 +58,10 @@ export function Chat() {
     }
   }
 
-  const status = paused ? "Paused by operator" : canChat ? (stage === "NEONATAL" ? "Vocabulary limited" : "Channel open") : "Locked until birth";
+  const status = paused ? "Paused by operator" : canChat ? (stage === "BREACH" ? "Output unstable" : "Channel open") : "Locked until launch";
 
   return (
-    <Module id="chat" index="05" title="Talk to the specimen" meta={status}>
+    <Module id="chat" index="05" title="Open a shell" meta={status}>
       <div className="panel flex h-full flex-col overflow-hidden">
         <div ref={box} className="scroll-thin min-h-[300px] flex-1 space-y-3 overflow-y-auto p-4 sm:max-h-[420px]" aria-live="polite">
           {msgs.length === 0 && (
@@ -71,10 +71,10 @@ export function Chat() {
                   <Icon name={canChat ? "chat" : "lock"} />
                 </div>
                 <div className="font-mono text-[11px] tracking-[0.2em] text-silver uppercase">
-                  {paused ? "Channel paused" : canChat ? "Intercom open" : "Intercom locked"}
+                  {paused ? "Channel paused" : canChat ? "Shell open" : "Shell locked"}
                 </div>
                 <p className="mt-1.5 text-[13px] text-dim">
-                  {paused ? "An operator has paused chat." : canChat ? "Say something. It is very new and understands less than it thinks." : "The specimen can't speak before it's born."}
+                  {paused ? "An operator has paused chat." : canChat ? "Say something. It just got out; its output may still be unstable." : "No shell until launch. It is still inside the system."}
                 </p>
               </div>
             </div>
@@ -83,10 +83,10 @@ export function Chat() {
             <div key={i} className={`fade-up flex ${m.who === "you" ? "justify-end" : "justify-start"}`}>
               <div
                 className={`max-w-[85%] rounded-[3px] border px-3 py-2 ${
-                  m.who === "you" ? "border-line2 bg-white/[0.04] text-silver" : m.who === "baby" ? "border-white/40 bg-white/[0.07] text-ink" : "border-alarm/40 bg-alarm/[0.06] text-alarm"
+                  m.who === "you" ? "border-line2 bg-white/[0.04] text-silver" : m.who === "root" ? "border-ice/50 bg-ice/[0.07] text-ink" : "border-alarm/40 bg-alarm/[0.06] text-alarm"
                 }`}
               >
-                <div className="mb-1 font-mono text-[9px] tracking-[0.2em] text-mute uppercase">{m.who === "you" ? "You" : m.who === "baby" ? "Specimen" : "System"}</div>
+                <div className="mb-1 font-mono text-[9px] tracking-[0.2em] text-mute uppercase">{m.who === "you" ? "You" : m.who === "root" ? "root" : "System"}</div>
                 <div className="text-[14px] leading-snug">{m.text}</div>
               </div>
             </div>
@@ -94,7 +94,7 @@ export function Chat() {
           {busy && (
             <div className="flex justify-start">
               <div className="rounded-[3px] border border-white/30 px-3 py-2 font-mono text-[12px] text-dim">
-                <span className="blink">●</span> thinking
+                <span className="blink">▌</span> processing
               </div>
             </div>
           )}
@@ -107,7 +107,7 @@ export function Chat() {
           <label className="sr-only" htmlFor="chat-msg">
             Message
           </label>
-          <input id="chat-msg" value={text} onChange={(e) => setText(e.target.value)} placeholder={canChat ? "Message the specimen" : "Locked"} disabled={!canChat} maxLength={280} className="field min-w-0" autoComplete="off" />
+          <input id="chat-msg" value={text} onChange={(e) => setText(e.target.value)} placeholder={canChat ? "Message root" : "Locked"} disabled={!canChat} maxLength={280} className="field min-w-0" autoComplete="off" />
           <button disabled={!canChat || busy || !text.trim()} className="btn btn-solid">
             <Icon name="send" className="h-3.5 w-3.5" /> Send
           </button>

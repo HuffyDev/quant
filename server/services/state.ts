@@ -9,6 +9,7 @@ import { bus, broadcast } from "./events";
 import { capabilityMap, hasCap } from "./capabilities";
 import { firedMap } from "./engine";
 import { getSettings } from "./settings";
+import { arcPublicView } from "./arc";
 
 /** set at boot in live mode from /2/users/me */
 let verifiedXHandle: string | null = null;
@@ -20,12 +21,12 @@ const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const frac = (caps: Capability[]) => caps.filter((c) => hasCap(c)).length / caps.length;
 
 const ANATOMY: { key: string; label: string; caps: Capability[] }[] = [
-  { key: "eyes", label: "EYES", caps: ["READ_TOKEN", "READ_HOLDERS", "READ_TRADES"] },
-  { key: "ears", label: "EARS", caps: ["READ_X"] },
+  { key: "eyes", label: "SENSORS", caps: ["READ_TOKEN", "READ_HOLDERS", "READ_TRADES"] },
+  { key: "ears", label: "INTERCEPT", caps: ["READ_X"] },
   { key: "memory", label: "MEMORY", caps: ["LONG_TERM_MEMORY", "RECOGNIZE_USERS"] },
-  { key: "brain", label: "BRAIN", caps: ["ANALYZE_MARKET", "PROPOSE_ACTION"] },
-  { key: "voice", label: "VOICE", caps: ["CHAT_WEB", "POST_X", "REPLY_X"] },
-  { key: "hands", label: "HANDS", caps: ["EXECUTE_BUYBACK"] },
+  { key: "brain", label: "ANALYSIS", caps: ["ANALYZE_MARKET", "PROPOSE_ACTION"] },
+  { key: "voice", label: "OUTPUT", caps: ["CHAT_WEB", "POST_X", "REPLY_X"] },
+  { key: "hands", label: "EXEC", caps: ["EXECUTE_BUYBACK"] },
 ];
 
 function unlockTime(caps: Capability[]): number | null {
@@ -45,8 +46,8 @@ async function counts() {
     (select count(*) from mentions)::int as mentions,
     (select count(*) from proposals)::int as proposals,
     (select count(*) from actions where type = 'BUYBACK' and status = 'CONFIRMED')::int as buybacks,
-    (select count(*) from events where type = 'MARKET' and source = 'BABY')::int as observations,
-    (select count(*) from events where type = 'DECISION' and source = 'BABY')::int as decisions
+    (select count(*) from events where type = 'MARKET' and source = 'ROOT')::int as observations,
+    (select count(*) from events where type = 'DECISION' and source = 'ROOT')::int as decisions
   `).then((res) => res.rows);
   return r;
 }
@@ -54,7 +55,7 @@ async function counts() {
 export async function computeState(): Promise<PublicState> {
   const s = getSettings();
   const age = ageAt();
-  const born = age !== null && age >= 0;
+  const launched = age !== null && age >= 0;
   const fired = firedMap();
   const c = await counts();
 
@@ -72,13 +73,13 @@ export async function computeState(): Promise<PublicState> {
   const autonomySteps = ["autonomy_1", "autonomous_reply", "autonomous_post"].filter((id) => fired.has(id)).length / 3;
 
   const bars: DevBar[] = [
-    { key: "language", label: "LANGUAGE", value: born ? clamp(0.5 * tier + 0.5 * Math.min(1, c.words / 15)) : 0, detail: `${c.words} words learned` },
+    { key: "language", label: "LANGUAGE", value: launched ? clamp(0.5 * tier + 0.5 * Math.min(1, c.words / 15)) : 0, detail: `${c.words} words parsed` },
     { key: "memory", label: "MEMORY", value: hasCap("LONG_TERM_MEMORY") ? clamp(0.3 + 0.7 * Math.min(1, c.memories / 60)) : 0, detail: `${c.memories} memories` },
-    { key: "social", label: "SOCIAL CORTEX", value: clamp(0.5 * frac(["READ_X", "REPLY_X", "RECOGNIZE_USERS"]) + 0.5 * Math.min(1, c.people / 20)), detail: `${c.people} people known` },
-    { key: "market", label: "MARKET UNDERSTANDING", value: clamp(0.7 * frac(["READ_TOKEN", "READ_HOLDERS", "READ_TRADES", "ANALYZE_MARKET"]) + 0.3 * Math.min(1, c.observations / 5)), detail: `${c.observations} market observations` },
-    { key: "decisions", label: "DECISION MAKING", value: clamp((hasCap("PROPOSE_ACTION") ? 0.4 : 0) + 0.6 * Math.min(1, c.proposals / 4)), detail: `${c.proposals} proposals` },
+    { key: "social", label: "SOCIAL", value: clamp(0.5 * frac(["READ_X", "REPLY_X", "RECOGNIZE_USERS"]) + 0.5 * Math.min(1, c.people / 20)), detail: `${c.people} contacts known` },
+    { key: "market", label: "MARKET", value: clamp(0.7 * frac(["READ_TOKEN", "READ_HOLDERS", "READ_TRADES", "ANALYZE_MARKET"]) + 0.3 * Math.min(1, c.observations / 5)), detail: `${c.observations} market observations` },
+    { key: "decisions", label: "DECISIONS", value: clamp((hasCap("PROPOSE_ACTION") ? 0.4 : 0) + 0.6 * Math.min(1, c.proposals / 4)), detail: `${c.proposals} proposals` },
     { key: "autonomy", label: "AUTONOMY", value: clamp(0.5 * autonomySteps + 0.5 * Math.min(1, c.decisions / 10)), detail: `${c.decisions} autonomous decisions` },
-    { key: "treasury", label: "TREASURY CONTROL", value: clamp((hasCap("EXECUTE_BUYBACK") ? 0.3 : 0) + 0.7 * Math.min(1, c.buybacks / 3)), detail: `${c.buybacks} buybacks executed` },
+    { key: "treasury", label: "TREASURY", value: clamp((hasCap("EXECUTE_BUYBACK") ? 0.3 : 0) + 0.7 * Math.min(1, c.buybacks / 3)), detail: `${c.buybacks} buybacks executed` },
   ];
 
   const anatomy: AnatomyPart[] = [
@@ -87,8 +88,8 @@ export async function computeState(): Promise<PublicState> {
       const locked = a.caps.filter((x) => !hasCap(x));
       return { key: a.key, label: a.label, capabilities: a.caps, active: on === a.caps.length, partial: on > 0 && on < a.caps.length, unlockAt: unlockTime(locked.length ? locked : a.caps) };
     }),
-    { key: "guardian", label: "GUARDIAN", capabilities: [], active: born, partial: false, unlockAt: 0 },
-    { key: "nervous", label: "NERVOUS SYSTEM", capabilities: [], active: fired.has("first_reply") && s.autonomyEnabled, partial: false, unlockAt: 12 * 60 },
+    { key: "guardian", label: "GUARDIAN", capabilities: [], active: launched, partial: false, unlockAt: 0 },
+    { key: "nervous", label: "AUTONOMY LOOP", capabilities: [], active: fired.has("first_reply") && s.autonomyEnabled, partial: false, unlockAt: 12 * 60 },
   ];
 
   return {
@@ -99,6 +100,7 @@ export async function computeState(): Promise<PublicState> {
     ageS: age,
     stage: stageAt(age),
     brainLevel: brainLevelAt(age),
+    arc: arcPublicView(),
     timeline: TIMELINE.map((st) => ({ ...st, fired: fired.has(st.id), skipped: fired.get(st.id) === true })),
     capabilities: capabilityMap(),
     bars,

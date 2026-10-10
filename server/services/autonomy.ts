@@ -43,7 +43,7 @@ async function context() {
 }
 
 /**
- * Baby chooses: IGNORE / REMEMBER / RESPOND / POST / ANALYZE / PROPOSE. Code then enforces caps and the Guardian.
+ * ROOT chooses: IGNORE / REMEMBER / RESPOND / POST / ANALYZE / PROPOSE. Code then enforces caps and the Guardian.
  */
 export async function decideAndAct(opts: { task: TaskType | "AUTONOMY_LOOP"; instruction: string; forced?: Decision; extra?: Record<string, unknown> }) {
   const ctx = await context();
@@ -98,7 +98,7 @@ export async function decideAndAct(opts: { task: TaskType | "AUTONOMY_LOOP"; ins
   return { decision, out };
 }
 
-// ── background loop (from T+12): every 45–90 baby-seconds ──
+// ── background loop (from T+12): every 45–90 sim-seconds ──
 let timer: NodeJS.Timeout | null = null;
 let last: { price: number | null; holders: number | null; age: number } | null = null;
 resetHooks.push(() => {
@@ -128,8 +128,8 @@ async function meaningfulChange(): Promise<string[]> {
 export function startAutonomyLoop() {
   if (timer) return;
   const schedule = () => {
-    const babyS = AUTONOMY.MIN_INTERVAL_S + Math.random() * (AUTONOMY.MAX_INTERVAL_S - AUTONOMY.MIN_INTERVAL_S);
-    timer = setTimeout(tick, Math.max(500, realMs(babyS)));
+    const simS = AUTONOMY.MIN_INTERVAL_S + Math.random() * (AUTONOMY.MAX_INTERVAL_S - AUTONOMY.MIN_INTERVAL_S);
+    timer = setTimeout(tick, Math.max(500, realMs(simS)));
   };
   const tick = () => {
     const ready = firedMap().has("first_reply") && getSettings().autonomyEnabled;

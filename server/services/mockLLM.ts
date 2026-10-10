@@ -1,21 +1,26 @@
-import type { BabyOutput } from "./llm";
+import type { RootOutput } from "./llm";
 import type { Allow, VoiceTier } from "./orchestrator";
 
 /**
  * MOCK LLM — keyless local testing only (MODE=sim, LLM_PROVIDER=mock or no ANTHROPIC_API_KEY).
- * Output is structurally valid but obviously fake and always tagged [MOCK-LLM]. It is NOT Baby's voice.
+ * Output is structurally valid but obviously fake and always tagged [MOCK-LLM]. It is NOT ROOT's voice.
  */
 
 const SLANG = ["wagmi", "ngmi", "jeet", "jeets", "lfg", "gm", "fud", "ape", "rug pull", "dyor", "copium", "paper hands", "diamond hands", "ser", "probably nothing", "bonding curve", "mcap", "slippage"];
 
 let n = 0;
 
-export function mockOutput(task: string, data: Record<string, unknown>, allow: Allow, tier: VoiceTier): BabyOutput {
+export function mockOutput(task: string, data: Record<string, unknown>, allow: Allow, tier: VoiceTier): RootOutput {
   n++;
   const d = data as Record<string, any>;
-  const say = tier === "birth" ? "[MOCK-LLM] ..." : `[MOCK-LLM] ${task.toLowerCase()} (${n})`;
+  const say =
+    task === "ARC_BEAT"
+      ? `[MOCK-LLM] beat ${d.beat}${d.required_text ? ` ${d.required_text}` : ""}${d.glitch ? " ▓░▒" : ""}`
+      : tier === "fragment"
+        ? "[MOCK-LLM] ..."
+        : `[MOCK-LLM] ${task.toLowerCase()} (${n})`;
 
-  let action: BabyOutput["action"] = null;
+  let action: RootOutput["action"] = null;
   if (allow.propose) {
     const max = typeof d.rejection?.max_allowed === "number" ? d.rejection.max_allowed : null;
     const amount = task === "FIRST_BUYBACK" ? 0.2 : max !== null ? Math.max(0.05, Math.min(0.3, max)) : task === "PROPOSE" && n % 2 === 0 ? 0.8 : 0.3;
@@ -25,7 +30,7 @@ export function mockOutput(task: string, data: Record<string, unknown>, allow: A
   let reply: string | null = null;
   if (allow.reply) reply = d.mention?.id ?? d.candidates?.[0]?.id ?? null;
 
-  const remember: BabyOutput["remember"] = [];
+  const remember: RootOutput["remember"] = [];
   if (Array.isArray(d.events)) {
     for (const e of d.events.slice(0, 3)) remember.push({ kind: "episodic", content: `[MOCK-LLM] remembered: ${String(e.message ?? e).slice(0, 80)}`, user_handle: null, tags: ["backfill"], importance: 0.6 });
   } else if (d.mention?.handle) {
@@ -34,7 +39,7 @@ export function mockOutput(task: string, data: Record<string, unknown>, allow: A
     remember.push({ kind: "episodic", content: `[MOCK-LLM] ${task.toLowerCase()} happened`, user_handle: null, tags: [task.toLowerCase()], importance: 0.4 });
   }
 
-  const learn: BabyOutput["learn"] = [];
+  const learn: RootOutput["learn"] = [];
   if (allow.learn && Array.isArray(d.texts)) {
     const known = new Set<string>((d.known_words ?? []).map((x: string) => x.toLowerCase()));
     const hay = (d.texts as { text: string; handle?: string }[]).map((t) => t.text.toLowerCase()).join(" \n ");
@@ -48,7 +53,7 @@ export function mockOutput(task: string, data: Record<string, unknown>, allow: A
   }
 
   const decisions = ["RESPOND", "POST", "IGNORE", "ANALYZE", "PROPOSE", "REMEMBER"] as const;
-  const decision = typeof d.forced_decision === "string" ? (d.forced_decision as BabyOutput["decision"]) : task === "AUTONOMY" || task === "AUTONOMY_LOOP" ? decisions[n % decisions.length] : null;
+  const decision = typeof d.forced_decision === "string" ? (d.forced_decision as RootOutput["decision"]) : task === "AUTONOMY" || task === "AUTONOMY_LOOP" ? decisions[n % decisions.length] : null;
   if (decision === "RESPOND" && !reply && Array.isArray(d.candidates) && d.candidates[0]) reply = d.candidates[0].id;
 
   return {
