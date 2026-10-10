@@ -52,7 +52,10 @@ interface OverlayProps {
   onSelect: (id: number) => void;
 }
 
-function Controls({ fly }: { fly: React.MutableRefObject<{ target: THREE.Vector3; dist: number } | null> }) {
+/** Rotation limit (rad) for the front-facing image cloud; a real brain.glb rotates freely. */
+const IMAGE_LIMIT = THREE.MathUtils.degToRad(55);
+
+function Controls({ fly, limited }: { fly: React.MutableRefObject<{ target: THREE.Vector3; dist: number } | null>; limited: boolean }) {
   const { camera, gl, size } = useThree();
   // frame the whole brain on any aspect (portrait phones need the camera further back)
   useEffect(() => {
@@ -69,14 +72,21 @@ function Controls({ fly }: { fly: React.MutableRefObject<{ target: THREE.Vector3
     c.enablePan = false;
     c.minDistance = MIN_DIST;
     c.maxDistance = MAX_DIST;
-    c.minPolarAngle = 0;
-    c.maxPolarAngle = Math.PI;
+    if (limited) {
+      c.minAzimuthAngle = -IMAGE_LIMIT;
+      c.maxAzimuthAngle = IMAGE_LIMIT;
+      c.minPolarAngle = Math.PI / 2 - IMAGE_LIMIT;
+      c.maxPolarAngle = Math.PI / 2 + IMAGE_LIMIT;
+    } else {
+      c.minPolarAngle = 0;
+      c.maxPolarAngle = Math.PI;
+    }
     c.rotateSpeed = 0.7;
     c.zoomSpeed = 0.8;
-    c.autoRotateSpeed = 0.7;
+    c.autoRotateSpeed = limited ? 0.35 : 0.7;
     c.autoRotate = true;
     return c;
-  }, [camera, gl]);
+  }, [camera, gl, limited]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const start = () => {
@@ -97,6 +107,7 @@ function Controls({ fly }: { fly: React.MutableRefObject<{ target: THREE.Vector3
       controls.dispose();
     };
   }, [controls, fly]);
+  const prevAz = useRef(0);
   useFrame((_, dt) => {
     const f = fly.current;
     if (f) {
@@ -106,6 +117,14 @@ function Controls({ fly }: { fly: React.MutableRefObject<{ target: THREE.Vector3
       const d = camera.position.distanceTo(controls.target);
       camera.position.copy(controls.target).addScaledVector(dir, d + (f.dist - d) * Math.min(1, dt * 4));
       if (controls.target.distanceTo(f.target) < 0.01 && Math.abs(d - f.dist) < 0.01) fly.current = null;
+    }
+    // limited: idle auto-rotate sways back and forth instead of stopping at the limit
+    if (limited && controls.autoRotate) {
+      const az = controls.getAzimuthalAngle();
+      const edge = IMAGE_LIMIT * 0.6;
+      // moving outward past the edge → reverse
+      if ((az > edge && az > prevAz.current) || (az < -edge && az < prevAz.current)) controls.autoRotateSpeed = -controls.autoRotateSpeed;
+      prevAz.current = az;
     }
     controls.update();
   });
@@ -184,8 +203,11 @@ function PinOverlay({ cloud, pins, visible, selectedId, newSince, overlay, coars
       w.copy(posOf(P[i])).applyMatrix4(g.matrixWorld);
       // far side of the brain: hidden
       toCam.copy(camera.position).sub(w).normalize();
-      const facing = w.clone().sub(center).normalize().dot(toCam);
-      if (facing < -0.05) continue;
+      // image cloud is front-facing within ±55°: every pin is visible
+      if (cloud.source !== "image") {
+        const facing = w.clone().sub(center).normalize().dot(toCam);
+        if (facing < -0.05) continue;
+      }
       w.project(camera);
       if (w.z > 1) continue;
       screen.push({ i, x: (w.x * 0.5 + 0.5) * size.width, y: (-w.y * 0.5 + 0.5) * size.height });
@@ -284,7 +306,7 @@ export default function CoreCanvas({
           onCreated={({ gl }) => gl.setClearColor(0x000000, 1)}
           style={{ position: "absolute", inset: 0, touchAction: "none" }}
         >
-          <Controls fly={fly} />
+          <Controls fly={fly} limited={cloud.source === "image"} />
           <BrainScene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} spin={0} tilt={[0, 0, 0]}>
             <group ref={group} />
           </BrainScene>

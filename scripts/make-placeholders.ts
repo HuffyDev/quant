@@ -1,7 +1,7 @@
 /**
  * npm run placeholders — regenerate the placeholder media (only files that don't exist yet, unless --force):
  *   public/root.png            logo / favicon / OG image          (replace with the real one)
- *   public/models/brain.glb    brain mesh, built from the procedural brain   (replace with the real one)
+ *   public/models/brain.glb    only with --glb: procedural placeholder mesh (normally absent: root.png is sampled instead)
  *   public/stream/hacker.mp4   1920×1080 loop: hooded figure at a monitor     (replace with the real one)
  *   public/stream/hacker.webm  same, VP9, for browsers without H.264  (replace too, or delete it)
  * Needs Chromium (CHROMIUM_PATH, default /opt/pw-browsers/chromium) for the PNG/MP4 and ffmpeg for the MP4.
@@ -166,7 +166,9 @@ async function makeMp4() {
   console.log(`wrote public/stream/hacker.mp4 (${(fs.statSync(pub("stream/hacker.mp4")).size / 1e6).toFixed(2)} MB)`);
 }
 
-if (need("models/brain.glb")) await makeGlb();
+// brain.glb is intentionally NOT generated: without one the site samples root.png (front-facing, ±55° on /core).
+// Run with --glb to write the procedural placeholder anyway.
+if (process.argv.includes("--glb") && need("models/brain.glb")) await makeGlb();
 if (need("root.png")) await makePng();
 if (need("stream/hacker.mp4")) await makeMp4();
 console.log("placeholders done");

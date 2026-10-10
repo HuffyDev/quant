@@ -159,11 +159,14 @@ Validate the real APIs and the real swap path with a **tiny throwaway token** on
 
 **Media (placeholders included, replace with yours, same paths):**
 - `public/root.png`: logo and static brain fallback. Square 1024px, brain ≈60% of the frame on pure black. Derived from it: `favicon.ico` (16/32/48), `favicon-32.png`, `apple-touch-icon.png` (180) and `og.png` (1200×630 link preview). If you replace `root.png`, regenerate those (ImageMagick commands in the commit that added them).
-- `public/models/brain.glb`: brain mesh. Uncompressed or meshopt (no Draco). Any size/units; it is centred and normalised. Orientation: front = +Z, up = +Y (glTF convention). Regions are split by position. If it is missing the site uses a procedural brain.
+- **The brain is sampled from `root.png` by default**: its bright pixels become a luminous point cloud (density and node size follow the image's brightness, with depth for volume), and the image itself glows behind it. It is front-facing, so `/core` limits rotation to ±55°.
+- `public/models/brain.glb` (optional): add a real brain mesh to replace the image cloud and unlock full rotation on `/core`. Uncompressed or meshopt (no Draco), any units (centred and normalised), front = +Z, up = +Y (glTF convention). The check happens at **build time**, so rebuild (Replit's Run does) after adding it.
 - `public/stream/hacker.mp4`: 1920×1080 H.264 loop. Also replace or delete `public/stream/hacker.webm` (VP9 fallback for browsers without H.264).
-- `npm run placeholders` regenerates missing placeholders (`-- --force` overwrites).
+- `npm run placeholders` regenerates missing placeholder media (`-- --force` overwrites; `-- --glb` also writes a procedural placeholder GLB, normally not wanted).
 
-**Brain quality:** starts by device class (high/mid/low), drops a tier on sustained <50fps, and switches to a static `root.png` below ~28fps on the lowest tier, without WebGL, or with reduced motion. Append `?quality=high|mid|low|static` to pin it (e.g. on the OBS machine).
+**First visit:** a ~2.5s boot sequence (once per browser session, skippable with any key/click, skipped with reduced motion) types a few lines and powers the brain on node by node.
+
+**Brain quality:** starts by device class (high 42k points + bloom / mid 24k + bloom / low 14k, no bloom), drops a tier on sustained <50fps, and switches to a static `root.png` below ~28fps on the lowest tier, without WebGL, or with reduced motion. Append `?quality=high|mid|low|static` to pin it (e.g. on the OBS machine).
 
 ---
 

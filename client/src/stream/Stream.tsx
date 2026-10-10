@@ -107,7 +107,7 @@ function MiniBrain() {
   const key = regionActivity(caps).join("");
   const active = useMemo(() => regionActivity(caps), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="relative h-[300px] w-full overflow-hidden rounded-[4px] border border-ice/25 bg-black">
+    <div className="relative h-[300px] w-full overflow-hidden rounded-[12px] border border-glow/15 bg-black">
       {start && !gaveUp ? (
         <Suspense fallback={null}>
           <QuantumBrain level={dormant ? 0.04 : level} active={active} startTier={start} maxTier="mid" onGiveUp={giveUp} spin={0.2} />
@@ -135,13 +135,13 @@ function Ticker({ side }: { side: "left" | "right" }) {
     <aside className={`stream-ticker absolute top-[40px] bottom-[40px] w-[360px] ${side === "left" ? "left-[40px]" : "right-[40px]"} flex flex-col gap-5 p-6`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="/root.png" alt="" className="h-10 w-10 rounded-[3px] object-contain" />
+          <img src="/favicon-32.png" alt="" className="h-9 w-9 rounded-[8px]" />
           <div>
-            <div className="display text-[26px] leading-none text-ink">ROOT</div>
-            <div className="font-mono text-[13px] tracking-[0.2em] text-ice">$ROOT</div>
+            <div className="font-display text-[28px] font-semibold leading-none tracking-[-0.03em] text-white">ROOT</div>
+            <div className="mt-1 font-mono text-[13px] tracking-[0.04em] text-glow">$ROOT</div>
           </div>
         </div>
-        <span className={`flex items-center gap-2 font-mono text-[12px] tracking-[0.18em] uppercase ${connected ? "text-ice" : "text-alarm"}`}>
+        <span className={`flex items-center gap-2 font-mono text-[12px] tracking-[0.18em] uppercase ${connected ? "text-glow" : "text-alarm"}`}>
           <span className={`dot ${connected ? "dot-live" : ""}`} />
           {connected ? "live" : "relink"}
         </span>
@@ -151,7 +151,7 @@ function Ticker({ side }: { side: "left" | "right" }) {
 
       <div>
         <div className="stream-k">{prelaunch ? (launchIn !== null && launchIn > 0 ? "launch in" : "breakout") : "uptime"}</div>
-        <div className="tnum ice-text glow font-mono text-[46px] leading-none">
+        <div className="t-data text-[48px] leading-none text-white">
           {prelaunch
             ? launchIn !== null && launchIn > 0
               ? `${String(Math.floor(launchIn / 3600)).padStart(2, "0")}:${String(Math.floor((launchIn % 3600) / 60)).padStart(2, "0")}:${String(Math.floor(launchIn % 60)).padStart(2, "0")}`
@@ -171,7 +171,7 @@ function Ticker({ side }: { side: "left" | "right" }) {
         <div className="stream-k">last action</div>
         {last ? (
           <div className="font-mono text-[15px] leading-snug text-silver">
-            <span className="text-ice">{last.type.replace("_", " ").toLowerCase()}</span>
+            <span className="text-glow">{last.type.replace("_", " ").toLowerCase()}</span>
             {last.amountSol !== null && <span className="text-ink"> {last.amountSol} sol</span>}
             <span className="text-mute"> · {timeOf(last.ts)}</span>
             {last.summary && <div className="mt-1 line-clamp-3 text-[14px] text-dim">{last.summary}</div>}

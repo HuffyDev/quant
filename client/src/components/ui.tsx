@@ -1,6 +1,62 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
-/** Numbered lab module: the shared frame for every dashboard section. */
+/** Fades/slides children in when scrolled into view (once). Respects reduced motion via CSS. */
+export function Reveal({ children, className = "", delay = 0, as: Tag = "div" }: { children: ReactNode; className?: string; delay?: number; as?: "div" | "section" | "li" }) {
+  const ref = useRef<HTMLElement>(null);
+  const [inView, setIn] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return setIn(true);
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setIn(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -8% 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const El = Tag as "div";
+  return (
+    <El ref={ref as React.RefObject<HTMLDivElement>} className={`reveal ${inView ? "in" : ""} ${className}`} style={delay ? { transitionDelay: `${delay}ms` } : undefined}>
+      {children}
+    </El>
+  );
+}
+
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 4);
+
+/** A number that ticks to its new value (ease-out). */
+export function CountUp({ value, format = (v) => String(Math.round(v)), duration = 900 }: { value: number | null; format?: (v: number) => string; duration?: number }) {
+  const [shown, setShown] = useState(value ?? 0);
+  const from = useRef(value ?? 0);
+  useEffect(() => {
+    if (value === null) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return setShown(value);
+    const start = performance.now();
+    const a = from.current;
+    let id = 0;
+    const step = (t: number) => {
+      const k = Math.min(1, (t - start) / duration);
+      const v = a + (value - a) * easeOut(k);
+      setShown(v);
+      if (k < 1) id = requestAnimationFrame(step);
+      else from.current = value;
+    };
+    id = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(id);
+      from.current = value;
+    };
+  }, [value, duration]);
+  if (value === null) return <>—</>;
+  return <>{format(shown)}</>;
+}
+
+/** One numbered module of the machine. */
 export function Module({
   id,
   index,
@@ -18,52 +74,52 @@ export function Module({
 }) {
   return (
     <section id={id} aria-labelledby={id ? `${id}-title` : undefined} className={`min-w-0 ${className}`}>
-      <header className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="tnum font-mono text-[10px] text-mute">{index}</span>
-        <h2 id={id ? `${id}-title` : undefined} className="section-title min-w-0">
-          {title}
-        </h2>
-        <div className="hairline min-w-6 flex-1" aria-hidden />
-        {meta && <div className="w-full min-w-0 font-mono text-[10px] tracking-[0.16em] text-dim uppercase sm:w-auto sm:max-w-[50%] sm:truncate sm:text-right">{meta}</div>}
-      </header>
+      <Reveal>
+        <header className="module-head">
+          <span className="module-num tnum">{index}</span>
+          <h2 id={id ? `${id}-title` : undefined} className="t-h2 min-w-0">
+            {title}
+          </h2>
+          {meta ? <div className="t-label hidden text-right sm:block">{meta}</div> : <span />}
+        </header>
+      </Reveal>
       {children}
     </section>
+  );
+}
+
+/** Sub-panel title inside a module. */
+export function PanelHead({ title, meta }: { title: string; meta?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+      <span className="t-label text-silver">{title}</span>
+      {meta && <span className="t-label">{meta}</span>}
+    </div>
   );
 }
 
 /** Intentional empty / locked state. */
 export function EmptyState({ title, detail, locked = false, icon }: { title: string; detail?: ReactNode; locked?: boolean; icon?: ReactNode }) {
   return (
-    <div className={`panel flex items-center gap-4 px-5 py-6 ${locked ? "stripes" : ""}`}>
+    <div className="panel flex items-center gap-4 px-5 py-6">
       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line2 text-dim">{icon ?? (locked ? <Icon name="lock" /> : <Icon name="pulse" />)}</div>
       <div className="min-w-0">
-        <div className="font-mono text-[11px] tracking-[0.18em] text-silver uppercase">{title}</div>
-        {detail && <div className="mt-1 text-[13px] text-dim">{detail}</div>}
+        <div className="t-label text-silver">{title}</div>
+        {detail && <div className="mt-1 text-[14px] text-dim">{detail}</div>}
       </div>
     </div>
   );
 }
 
-/** Fixed-width digit readout (stable while digits change). */
-export function Readout({ value, unit, size = "md" }: { value: string; unit?: string; size?: "md" | "lg" | "xl" }) {
-  const cls = size === "xl" ? "text-[clamp(2.6rem,7vw,4.6rem)]" : size === "lg" ? "text-[clamp(1.6rem,3.4vw,2.1rem)]" : "text-lg";
-  return (
-    <span className="inline-flex items-baseline gap-1">
-      <span className={`tnum font-mono font-medium leading-none text-ink ${cls}`}>{value}</span>
-      {unit && <span className="font-mono text-[10px] tracking-[0.18em] text-dim uppercase">{unit}</span>}
-    </span>
-  );
-}
-
 export function StatusTag({ tone, children }: { tone: "on" | "partial" | "off" | "warn" | "alarm"; children: ReactNode }) {
   const cls = {
-    on: "border-white/70 bg-white text-black",
-    partial: "border-white/40 text-ink",
-    off: "border-line2 text-mute",
-    warn: "border-amber/60 text-amber",
+    on: "border-glow/50 text-glow",
+    partial: "border-line3 text-silver",
+    off: "border-line text-mute",
+    warn: "border-line3 text-silver",
     alarm: "border-alarm/70 bg-alarm/10 text-alarm",
   }[tone];
-  return <span className={`inline-flex items-center gap-1.5 rounded-[2px] border px-1.5 py-[3px] font-mono text-[9px] leading-none tracking-[0.16em] uppercase ${cls}`}>{children}</span>;
+  return <span className={`inline-flex h-[22px] items-center gap-1.5 rounded-full border px-2.5 font-mono text-[10px] leading-none tracking-[0.06em] uppercase ${cls}`}>{children}</span>;
 }
 
 type IconName =

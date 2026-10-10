@@ -66,7 +66,8 @@ Unchanged from the base build: deterministic `evaluate(proposal, state)`; limits
 
 ## 4. Quantum brain (`client/src/brain`)
 
-- three.js loads `/models/brain.glb` (falls back to a procedural point-cloud brain). The result is a translucent white-blue point cloud with a fresnel shell, neural filaments with travelling signals, drifting particles, bloom and slow rotation.
+- three.js samples `/root.png` into a luminous point cloud (or loads `/models/brain.glb` when one is shipped), with the image as a glowing backplate, neural filaments with travelling signals, dust and bloom. It powers on node by node after a short boot sequence and tilts toward the cursor.
+- Design: true black, white, one cold glow (#cfe6ff); red only for Guardian rejections and warnings. Geist + Geist Mono, 12-col grid, film grain, one easing curve, reduced-motion respected.
 - Six regions by position: SOCIAL (temporal), MARKET (parietal), MEMORY (core), TREASURY (occipital/cerebellum/stem), DECISIONS (frontal), LANGUAGE (temporal). They light as capabilities unlock.
 - Live events pulse their region: reply/post → SOCIAL, buyback → TREASURY, memory → MEMORY. A Guardian rejection flashes the whole brain red.
 - Adaptive quality (high/mid/low) with static `root.png` fallback; pauses off-screen.

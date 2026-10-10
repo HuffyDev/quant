@@ -31,6 +31,18 @@ export function regionOf(x: number, y: number, z: number, inner: boolean): numbe
   return REGION_INDEX.MEMORY;
 }
 
+/**
+ * Regions for the front-facing image cloud (root.png is a coronal front view): crown → DECISIONS,
+ * upper sides → MARKET, lower sides → SOCIAL (viewer's left) / LANGUAGE (right), bottom → TREASURY, centre → MEMORY.
+ */
+export function regionOfFront(x: number, y: number): number {
+  if (y < -0.58) return REGION_INDEX.TREASURY;
+  if (y > 0.5) return REGION_INDEX.DECISIONS;
+  if (Math.abs(x) > 0.42 && y > -0.05) return REGION_INDEX.MARKET;
+  if (Math.abs(x) > 0.3 && y <= -0.05) return x < 0 ? REGION_INDEX.SOCIAL : REGION_INDEX.LANGUAGE;
+  return REGION_INDEX.MEMORY;
+}
+
 export type Pulse = { region: number } | { all: true; strength: number } | { alarm: true };
 
 /** Which region a live event lights up (null = none). */

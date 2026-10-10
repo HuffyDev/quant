@@ -1,9 +1,8 @@
-import { useState } from "react";
-import type { AnatomyPart } from "@shared/types";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store";
 import { useAge, realSeconds } from "../hooks";
-import { fmtAgeShort, fmtCountdown, fmtSol, fmtT, fmtUsd, shortSig, stepPace, timeOf } from "../format";
-import { EmptyState, Icon, Module, StatusTag } from "./ui";
+import { fmtAgeShort, fmtCountdown, fmtSol, fmtT, fmtUsd, shortSig, timeOf } from "../format";
+import { CountUp, EmptyState, Icon, Module, PanelHead, Reveal, StatusTag } from "./ui";
 
 // stable fallback: a fresh [] per call would loop useSyncExternalStore
 const EMPTY: never[] = [];
@@ -11,455 +10,392 @@ const EMPTY: never[] = [];
 function More({ total, shown, onClick }: { total: number; shown: number; onClick: () => void }) {
   if (total <= shown) return null;
   return (
-    <button onClick={onClick} className="btn mt-3 w-full sm:w-auto">
+    <button onClick={onClick} className="btn mt-4">
       Show all {total} <Icon name="down" className="h-3.5 w-3.5" />
     </button>
   );
 }
 
-const Container = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <div className={`mx-auto max-w-[1440px] px-4 py-12 sm:px-6 lg:px-10 ${className}`}>{children}</div>
-);
-export { Container };
-
 function ProofLink({ href, label }: { href: string; label: string }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={label}
-      className="inline-flex min-h-[30px] items-center gap-1.5 rounded-[2px] border border-white/30 px-2.5 font-mono text-[10px] tracking-[0.16em] text-ink uppercase transition hover:border-white hover:bg-white hover:text-black"
-    >
+    <a href={href} target="_blank" rel="noreferrer" aria-label={label} className="btn h-8 min-h-0 px-3 text-[11px]">
       Proof <Icon name="ext" className="h-3 w-3" />
     </a>
   );
 }
 
-// ── 02. Access levels ─────────────────────────────────────────────────────────
-export function AccessLevels() {
-  const bars = useStore((s) => s.state?.bars ?? EMPTY);
-  const SEGS = 24;
-  return (
-    <Module index="02" title="Access levels" meta="Computed from live state">
-      <div className="grid gap-px overflow-hidden rounded-[3px] border border-line bg-line md:grid-cols-2">
-        {bars.map((b) => {
-          const on = Math.round(b.value * SEGS);
-          return (
-            <div key={b.key} className="bg-base px-4 py-4 md:last:odd:col-span-2">
-              <div className="mb-2.5 flex items-baseline justify-between gap-3">
-                <span className="font-mono text-[11px] tracking-[0.2em] text-ink uppercase">{b.label}</span>
-                <span className="tnum font-mono text-xl text-ink">
-                  {Math.round(b.value * 100)}
-                  <span className="text-[10px] text-dim">%</span>
-                </span>
-              </div>
-              <div className="flex gap-[3px]" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(b.value * 100)} aria-label={b.label}>
-                {Array.from({ length: SEGS }, (_, i) => (
-                  <span key={i} className={`seg ${i < on ? "on" : ""}`} style={{ transitionDelay: `${i * 25}ms` }} />
-                ))}
-              </div>
-              <div className="mt-2 font-mono text-[11px] text-dim">{b.detail}</div>
-            </div>
-          );
-        })}
-      </div>
-    </Module>
-  );
-}
-
-// ── 03. Subsystems ─────────────────────────────────────────────────────────────
-const ANATOMY_ICON: Record<string, Parameters<typeof Icon>[0]["name"]> = {
-  eyes: "eye", ears: "ear", memory: "memory", brain: "brain", voice: "voice", hands: "hand", guardian: "shield", nervous: "nerve",
-};
-
-export function Subsystems() {
-  const { age, state } = useAge(1000);
-  if (!state) return null;
-  return (
-    <Module index="03" title="Subsystems" meta={`${state.anatomy.filter((a) => a.active).length}/${state.anatomy.length} subsystems online`}>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {state.anatomy.map((a) => (
-          <Subsystem key={a.key} a={a} until={a.unlockAt !== null && age !== null ? realSeconds(a.unlockAt - Math.max(0, age), state.simSpeed) : null} caps={state.capabilities} />
-        ))}
-      </div>
-    </Module>
-  );
-}
-
-function Subsystem({ a, until, caps }: { a: AnatomyPart; until: number | null; caps: Record<string, boolean> }) {
-  const partial = !a.active && !!a.partial;
-  return (
-    <div className={`panel relative overflow-hidden px-4 py-4 transition ${a.active ? "border-white/35 shadow-[0_0_40px_-18px_rgba(255,255,255,0.5)]" : partial ? "border-white/20" : "stripes"}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className={`grid h-9 w-9 place-items-center rounded-full border ${a.active ? "border-white/70 text-ink" : "border-line2 text-mute"}`}>
-          <Icon name={ANATOMY_ICON[a.key] ?? "pulse"} className="h-[18px] w-[18px]" />
-        </div>
-        {a.active ? <StatusTag tone="on">Online</StatusTag> : partial ? <StatusTag tone="partial">Partial</StatusTag> : <StatusTag tone="off"><Icon name="lock" className="h-2.5 w-2.5" />Locked</StatusTag>}
-      </div>
-      <div className="mt-3 font-display text-[15px] font-semibold tracking-tight text-ink uppercase" style={{ fontStretch: "112%" }}>
-        {a.label}
-      </div>
-      <div className="tnum mt-0.5 h-4 font-mono text-[11px] text-dim">
-        {!a.active && until !== null && until > 0 ? `${partial ? "next in" : "unlocks in"} ${fmtCountdown(until)}` : a.active ? "all systems online" : ""}
-      </div>
-      {a.capabilities.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {a.capabilities.map((c) => (
-            <span key={c} className={`rounded-[2px] border px-1.5 py-[2px] font-mono text-[9px] tracking-[0.06em] ${caps[c] ? "border-white/30 text-silver" : "border-line text-mute"}`}>
-              {c}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── 06. Action log ──────────────────────────────────────────────────────────
+// ── Action log (inside 01 Activity) ─────────────────────────────────────────
 export function ActionLog() {
   const all = useStore((s) => s.state?.actions ?? EMPTY);
-  const [n, setN] = useState(12);
+  const [n, setN] = useState(8);
   const actions = all.slice(0, n);
   return (
-    <Module id="actions" index="06" title="Action log" meta="Every row links to proof">
+    <Reveal className="panel overflow-hidden">
+      <div id="actions" />
+      <PanelHead title="Action log" meta="every row links to proof" />
       {all.length === 0 ? (
-        <EmptyState title="No actions yet" detail="Posts, replies and buybacks land here, each with an on-chain or on-X proof link." />
+        <div className="px-5 py-8 text-[14px] text-dim">Posts, replies and buybacks land here, each with an on-chain or on-X proof link.</div>
       ) : (
-        <div className="panel divide-y divide-white/[0.06] overflow-hidden">
+        <ul className="divide-y divide-white/[0.05]">
           {actions.map((a) => {
             const link = a.proofUrl ?? a.xUrl;
             const tone = a.status === "CONFIRMED" ? "on" : a.status === "FAILED" ? "alarm" : "warn";
             const icon = a.type === "BUYBACK" ? "bolt" : a.type === "X_REPLY" ? "chat" : "send";
             return (
-              <div key={a.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3">
-                <div className="grid h-8 w-8 place-items-center rounded-full border border-line2 text-silver">
+              <li key={a.id} className="row-hover grid grid-cols-[auto_1fr_auto] items-center gap-4 px-5 py-3.5">
+                <span className={`grid h-9 w-9 place-items-center rounded-full border ${a.type === "BUYBACK" ? "border-glow/40 text-glow" : "border-line2 text-silver"}`}>
                   <Icon name={icon} className="h-3.5 w-3.5" />
-                </div>
+                </span>
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[11px] tracking-[0.16em] text-ink uppercase">{a.type.replace("_", " ")}</span>
-                    {a.amountSol !== null && <span className="tnum font-mono text-[12px] text-ink">{fmtSol(a.amountSol)}</span>}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <span className="font-mono text-[12px] tracking-[0.04em] text-ink uppercase">{a.type.replace("_", " ")}</span>
+                    {a.amountSol !== null && <span className="t-data text-[13px] text-glow">{fmtSol(a.amountSol)}</span>}
                     <StatusTag tone={tone}>{a.status}</StatusTag>
-                    <span className="tnum font-mono text-[10px] text-mute">{timeOf(a.ts)}</span>
+                    <span className="t-data text-[12px] text-mute">{timeOf(a.ts)}</span>
                   </div>
-                  {a.summary && <div className="mt-1 truncate text-[13px] text-dim">{a.summary}</div>}
+                  {a.summary && <div className="mt-1 truncate text-[14px] text-dim">{a.summary}</div>}
                 </div>
-                {link ? <ProofLink href={link} label={`Proof for ${a.type} ${a.txSig ? shortSig(a.txSig, 4) : ""}`} /> : <span className="font-mono text-[10px] text-mute">—</span>}
-              </div>
+                {link ? <ProofLink href={link} label={`Proof for ${a.type} ${a.txSig ? shortSig(a.txSig, 4) : ""}`} /> : <span className="t-label">—</span>}
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
-      <More total={all.length} shown={n} onClick={() => setN(1000)} />
-    </Module>
+      <div className="px-5 pb-4">
+        <More total={all.length} shown={n} onClick={() => setN(1000)} />
+      </div>
+    </Reveal>
   );
 }
 
-// ── 07. Proposals ───────────────────────────────────────────────────────────
-export function Proposals() {
+// ── 02 Treasury: readouts + proposals & Guardian ─────────────────────────────
+export function Treasury() {
+  const state = useStore((s) => s.state);
   const all = useStore((s) => s.state?.proposals ?? EMPTY);
-  const [n, setN] = useState(6);
-  const proposals = all.slice(0, n);
+  const [n, setN] = useState(5);
+  if (!state) return null;
+  const buybacks = state.actions.filter((a) => a.type === "BUYBACK" && a.status === "CONFIRMED");
+  const spent = buybacks.reduce((s, a) => s + (a.amountSol ?? 0), 0);
+  const rejected = all.filter((p) => p.status === "REJECTED").length;
+  const stats: [string, React.ReactNode][] = [
+    ["Treasury", <><CountUp value={state.vitals.treasurySol} format={(v) => v.toFixed(3)} /> <span className="text-[16px] text-dim">SOL</span></>],
+    ["Bought back", <><CountUp value={spent} format={(v) => v.toFixed(2)} /> <span className="text-[16px] text-dim">SOL</span></>],
+    ["Buybacks", <CountUp value={buybacks.length} />],
+    ["Guardian rejections", <span className={rejected ? "text-alarm" : ""}><CountUp value={rejected} /></span>],
+  ];
   return (
-    <Module index="07" title="Proposals · Guardian" meta="Deterministic risk engine">
-      {all.length === 0 ? (
-        <EmptyState locked title="Decision making locked" detail="Structured proposals begin at T+22:00. The Guardian rules on every one, publicly." />
-      ) : (
-        <div className="grid gap-3">
-          {proposals.map((p) => {
-            const rejected = p.status === "REJECTED" || p.status === "FAILED";
-            const pending = p.status === "PENDING";
-            return (
-              <article key={p.id} className="panel panel-ticks overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
-                  <div className="flex items-baseline gap-3">
-                    <span className="tnum font-mono text-[11px] text-mute">#{String(p.id).padStart(3, "0")}</span>
-                    <span className="font-mono text-[12px] tracking-[0.14em] text-ink uppercase">{p.type}</span>
-                    <span className="tnum font-mono text-lg text-ink">{fmtSol(p.amount)}</span>
-                  </div>
-                  <StatusTag tone={rejected ? "alarm" : pending ? "warn" : "on"}>{p.status}</StatusTag>
-                </div>
-                <div className="grid gap-4 px-4 py-3 sm:grid-cols-[1fr_160px]">
-                  <ul className="space-y-1 text-[13px] text-silver">
-                    {p.reasons.map((r, i) => (
-                      <li key={i} className="flex gap-2">
-                        <span className="text-mute">—</span>
-                        <span>{r}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div>
-                    <div className="eyebrow mb-1.5">Confidence</div>
-                    <div className="bar-track">
-                      <div className="bar-fill" style={{ width: `${Math.round(p.confidence * 100)}%` }} />
-                    </div>
-                    <div className="tnum mt-1 font-mono text-[11px] text-ink">{Math.round(p.confidence * 100)}%</div>
-                  </div>
-                </div>
-                {p.guardianResult && (
-                  <div className={`flex items-start gap-3 border-t px-4 py-3 ${rejected ? "border-alarm/30 bg-alarm/[0.05]" : "border-line bg-white/[0.02]"}`}>
-                    <Icon name="shield" className={`mt-0.5 h-4 w-4 shrink-0 ${rejected ? "text-alarm" : "text-ink"}`} />
-                    <div className="min-w-0 text-[13px]">
-                      <span className={`font-mono text-[11px] tracking-[0.16em] uppercase ${rejected ? "text-alarm" : "text-ink"}`}>Guardian {p.guardianResult}</span>
-                      <span className="text-dim"> — {p.guardianReason}</span>
-                      {p.maxAllowed !== null && p.guardianResult === "REJECTED" && <span className="tnum block font-mono text-[11px] text-silver">max allowed now {fmtSol(p.maxAllowed)}</span>}
-                    </div>
-                  </div>
-                )}
-              </article>
-            );
-          })}
+    <Module id="treasury" index="02" title="Treasury" meta="guardian-checked · buyback only">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Reveal className="grid grid-cols-2 content-start gap-px self-start overflow-hidden rounded-[10px] border border-line bg-line lg:col-span-4 lg:grid-cols-1">
+          {stats.map(([k, v]) => (
+            <div key={k} className="bg-black px-5 py-6">
+              <div className="t-label">{k}</div>
+              <div className="t-data mt-2 text-[28px] leading-none text-ink sm:text-[34px]">{v}</div>
+            </div>
+          ))}
+        </Reveal>
+        <div className="lg:col-span-8">
+          {all.length === 0 ? (
+            <EmptyState locked title="Decision making locked" detail="Structured proposals begin at T+22:00. The Guardian rules on every one, publicly." />
+          ) : (
+            <div className="grid gap-4">
+              {all.slice(0, n).map((p, i) => {
+                const rejected = p.status === "REJECTED" || p.status === "FAILED";
+                const pending = p.status === "PENDING";
+                return (
+                  <Reveal key={p.id} delay={i * 40}>
+                    <article className={`panel overflow-hidden ${rejected ? "border-alarm/40" : ""}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                        <div className="flex items-baseline gap-4">
+                          <span className="t-data text-[12px] text-mute">#{String(p.id).padStart(3, "0")}</span>
+                          <span className="t-data text-[22px] text-ink">{fmtSol(p.amount)}</span>
+                          <span className="t-label">{p.type}</span>
+                        </div>
+                        <StatusTag tone={rejected ? "alarm" : pending ? "warn" : "on"}>{p.status}</StatusTag>
+                      </div>
+                      <div className="grid gap-5 border-t border-line px-5 py-4 sm:grid-cols-[1fr_180px]">
+                        <ul className="space-y-1.5 text-[14px] leading-relaxed text-silver">
+                          {p.reasons.map((r, j) => (
+                            <li key={j} className="flex gap-3">
+                              <span className="text-mute">—</span>
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div>
+                          <div className="t-label mb-2 flex justify-between">
+                            <span>Confidence</span>
+                            <span className="tnum text-ink">{Math.round(p.confidence * 100)}%</span>
+                          </div>
+                          <div className="bar-track">
+                            <div className="bar-fill" style={{ width: `${Math.round(p.confidence * 100)}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                      {p.guardianResult && (
+                        <div className={`flex items-start gap-3 border-t px-5 py-3.5 ${rejected ? "border-alarm/30 bg-alarm/[0.05]" : "border-line"}`}>
+                          <Icon name="shield" className={`mt-0.5 h-4 w-4 shrink-0 ${rejected ? "text-alarm" : "text-glow"}`} />
+                          <div className="min-w-0 text-[14px]">
+                            <span className={`font-mono text-[12px] tracking-[0.06em] uppercase ${rejected ? "text-alarm" : "text-glow"}`}>Guardian {p.guardianResult}</span>
+                            <span className="text-dim"> — {p.guardianReason}</span>
+                            {p.maxAllowed !== null && p.guardianResult === "REJECTED" && <span className="t-data block text-[12px] text-silver">max allowed now {fmtSol(p.maxAllowed)}</span>}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  </Reveal>
+                );
+              })}
+            </div>
+          )}
+          <More total={all.length} shown={n} onClick={() => setN(1000)} />
         </div>
-      )}
-      <More total={all.length} shown={n} onClick={() => setN(1000)} />
+      </div>
     </Module>
   );
 }
 
-// ── 08. Escalation timeline ────────────────────────────────────────────────────────────
-export function Timeline() {
+// ── 03 Escalation: one horizontal rail ──────────────────────────────────────
+export function Escalation() {
   const { age, state } = useAge(1000);
-  const [showAll, setShowAll] = useState(false);
+  const rail = useRef<HTMLOListElement>(null);
+  const nextId = state?.timeline.find((s) => s.t <= 3600 && !s.fired)?.id;
+  // keep the current step in view
+  useEffect(() => {
+    const el = rail.current?.querySelector<HTMLElement>(`[data-id="${nextId}"]`);
+    if (el && rail.current) rail.current.scrollTo({ left: Math.max(0, el.offsetLeft - 120), behavior: "smooth" });
+  }, [nextId]);
   if (!state) return null;
   const hour = state.timeline.filter((s) => s.t <= 3600);
   const days = state.timeline.filter((s) => s.t > 3600);
-  // collapsed view: the latest fired steps plus what's coming next
-  const lastFired = hour.reduce((m, s, i) => (s.fired ? i : m), -1);
-  const visibleHour = showAll ? hour : hour.filter((_, i) => (lastFired < 0 ? i < 4 : i >= lastFired - 5 && i <= lastFired + 4));
-  const nextId = hour.find((s) => !s.fired)?.id;
   const done = hour.filter((s) => s.fired).length;
-
   return (
-    <Module index="08" title="Escalation timeline" meta={`${done}/${hour.length} first-hour steps · one every ~${stepPace()}`}>
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
-        <div className="panel px-2 py-2 sm:px-3">
-          <ol className="relative">
-            {visibleHour.map((s, i) => {
-              const until = age !== null ? realSeconds(s.t - Math.max(0, age), state.simSpeed) : null;
-              const isNext = s.id === nextId;
-              const last = i === visibleHour.length - 1;
-              return (
-                <li key={s.id} className="relative grid grid-cols-[52px_24px_1fr] gap-2 rounded-[2px] px-2 py-2.5 sm:grid-cols-[64px_24px_1fr_auto] sm:gap-3">
-                  <span className="tnum pt-0.5 font-mono text-[11px] text-mute">{fmtT(s.t)}</span>
-                  <span className="relative flex justify-center">
-                    {!last && <span className={`absolute top-4 bottom-[-22px] w-px ${s.fired ? "bg-white/40" : "bg-white/10"}`} />}
-                    <span
-                      className={`relative z-10 mt-1 h-2.5 w-2.5 rounded-full border ${s.fired ? (s.skipped ? "border-white/60 bg-transparent" : "border-white bg-white shadow-[0_0_10px_rgba(255,255,255,0.7)]") : isNext ? "dot-live border-white bg-black" : "border-white/25 bg-black"}`}
-                    />
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`font-mono text-[12px] tracking-[0.12em] uppercase ${s.fired ? "text-ink" : isNext ? "text-ink" : "text-dim"}`}>
-                      {s.label}
-                      {s.skipped && <span className="ml-2 text-[10px] text-mute">skipped</span>}
-                      {isNext && <span className="ml-2 text-[10px] text-silver">· next</span>}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] leading-snug text-mute">{s.description}</span>
-                    {s.unlocks.length > 0 && (
-                      <span className="mt-1.5 flex flex-wrap gap-1">
-                        {s.unlocks.map((c) => (
-                          <span key={c} className={`rounded-[2px] border px-1.5 py-[1px] font-mono text-[9px] ${s.fired ? "border-white/30 text-silver" : "border-line text-mute"}`}>
-                            {c}
-                          </span>
-                        ))}
+    <Module id="escalation" index="03" title="Escalation" meta={`${done}/${hour.length} first-hour steps`}>
+      <Reveal>
+        <div className="bar-track mb-6">
+          <div className="bar-fill" style={{ width: `${(done / hour.length) * 100}%` }} />
+        </div>
+        <ol ref={rail} className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+          {hour.map((s) => {
+            const until = age !== null ? realSeconds(s.t - Math.max(0, age), state.simSpeed) : null;
+            const isNext = s.id === nextId;
+            return (
+              <li
+                key={s.id}
+                data-id={s.id}
+                className={`panel w-[220px] shrink-0 snap-start p-4 transition-[border-color,background] duration-500 ${isNext ? "border-glow/50 bg-glow/[0.04]" : s.fired ? "" : "opacity-60"}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="t-data text-[12px] text-mute">{fmtT(s.t)}</span>
+                  {s.fired ? (
+                    s.skipped ? (
+                      <span className="t-label">skipped</span>
+                    ) : (
+                      <Icon name="check" className="h-3.5 w-3.5 text-glow" />
+                    )
+                  ) : isNext ? (
+                    <span className="t-data text-[12px] text-glow">{until !== null && until > 0 ? fmtCountdown(until) : "now"}</span>
+                  ) : null}
+                </div>
+                <div className={`mt-3 text-[15px] font-medium tracking-[-0.01em] ${s.fired || isNext ? "text-ink" : "text-silver"}`}>{s.label.toLowerCase()}</div>
+                <p className="mt-1.5 line-clamp-3 text-[13px] leading-snug text-dim">{s.description}</p>
+                {s.unlocks.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {s.unlocks.map((c) => (
+                      <span key={c} className={`rounded-full border px-2 py-[2px] font-mono text-[9.5px] ${s.fired ? "border-glow/30 text-glow" : "border-line text-mute"}`}>
+                        {c}
                       </span>
-                    )}
-                  </span>
-                  <span className="tnum col-start-3 font-mono text-[11px] text-dim sm:col-start-auto sm:pt-0.5 sm:text-right">
-                    {s.fired ? <Icon name="check" className="inline h-3.5 w-3.5 text-ink" /> : until !== null && until > 0 ? fmtCountdown(until) : ""}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-          {!showAll && hour.length > visibleHour.length && (
-            <button onClick={() => setShowAll(true)} className="btn m-2">
-              Show full first hour <Icon name="down" className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div>
-          <div className="eyebrow mb-3">Locked escalation · beyond hour one</div>
-          <ol className="grid grid-cols-[minmax(0,1fr)] gap-2">
-            {days.map((s) => {
-              const until = age !== null ? realSeconds(s.t - Math.max(0, age), state.simSpeed) : null;
-              return (
-                <li key={s.id} className="panel stripes flex items-center gap-3 px-3 py-3">
-                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[2px] border border-line bg-black font-mono text-[9px] tracking-[0.1em] text-mute uppercase">
-                    {s.stage.slice(0, 4)}
+                    ))}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="tnum font-mono text-[10px] text-mute">{fmtT(s.t)}</span>
-                      <span className="truncate font-mono text-[12px] tracking-[0.12em] text-ink uppercase">{s.label}</span>
-                    </div>
-                    <div className="mt-0.5 text-[12px] leading-snug text-mute">{s.description}</div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <StatusTag tone="off">
-                      <Icon name="lock" className="h-2.5 w-2.5" />
-                      Locked
-                    </StatusTag>
-                    <div className="tnum mt-1.5 font-mono text-[11px] text-silver">{until !== null && until > 0 ? fmtCountdown(until) : s.wired ? "" : "awaiting wiring"}</div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </Reveal>
+      <Reveal delay={80} className="mt-10">
+        <div className="t-label mb-4">Beyond hour one · locked</div>
+        <ol className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border border-line bg-line sm:grid-cols-4 lg:grid-cols-7">
+          {days.map((s) => {
+            const until = age !== null ? realSeconds(s.t - Math.max(0, age), state.simSpeed) : null;
+            return (
+              <li key={s.id} className="bg-black p-4">
+                <div className="t-data text-[12px] text-mute">{fmtT(s.t)}</div>
+                <div className="mt-2 text-[14px] font-medium text-silver">{s.label.toLowerCase()}</div>
+                <div className="t-data mt-3 text-[12px] text-dim">{until !== null && until > 0 ? fmtCountdown(until) : s.wired ? "" : "awaiting wiring"}</div>
+              </li>
+            );
+          })}
+        </ol>
+      </Reveal>
     </Module>
   );
 }
 
-// ── 09–10. Memories + People ────────────────────────────────────────────────
-export function MemoriesPeople() {
+// ── 04 Mind: capability matrix + memory + contacts ──────────────────────────
+export function Mind() {
+  const { age, state } = useAge(1000);
   const memories = useStore((s) => s.state?.memories ?? EMPTY);
-  const allPeople = useStore((s) => s.state?.people ?? EMPTY);
+  const people = useStore((s) => s.state?.people ?? EMPTY);
   const slang = useStore((s) => s.state?.slang ?? EMPTY);
-  const [pn, setPn] = useState(15);
-  const people = allPeople.slice(0, pn);
+  const [tab, setTab] = useState<"memory" | "contacts" | "words">("memory");
+  if (!state) return null;
+  const on = Object.values(state.capabilities).filter(Boolean).length;
+  const total = Object.keys(state.capabilities).length;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-12 lg:grid-cols-2 lg:gap-8">
-      <Module id="memories" index="09" title="Memories" meta={`${memories.length} stored`}>
-        {memories.length === 0 ? (
-          <EmptyState locked title="Long-term memory offline" detail="Memory mounts at T+14:00 and backfills its first minutes." />
-        ) : (
-          <div className="panel scroll-thin max-h-[440px] divide-y divide-white/[0.06] overflow-y-auto">
-            {memories.map((m) => (
-              <div key={m.id} className="px-4 py-3">
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="rounded-[2px] border border-white/30 px-1.5 py-[1px] font-mono text-[9px] tracking-[0.14em] text-silver uppercase">{m.kind}</span>
-                  <span className="tnum font-mono text-[10px] text-mute">formed {fmtAgeShort(m.ageS).replace(" old", "")}</span>
-                  {m.userHandle && <span className="font-mono text-[10px] text-dim">@{m.userHandle}</span>}
+    <Module id="mind" index="04" title="Mind" meta={`${on}/${total} capabilities online`}>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <Reveal className="lg:col-span-7">
+          {/* meters */}
+          <div className="panel mb-6 grid grid-cols-1 gap-x-8 gap-y-5 p-5 sm:grid-cols-2">
+            {state.bars.map((b) => (
+              <div key={b.key}>
+                <div className="flex items-baseline justify-between">
+                  <span className="t-label text-silver">{b.label}</span>
+                  <span className="t-data text-[13px] text-ink">
+                    <CountUp value={Math.round(b.value * 100)} />%
+                  </span>
                 </div>
-                <div className="text-[14px] leading-snug text-ink">{m.content}</div>
-                {m.tags.length > 0 && <div className="mt-1 font-mono text-[10px] text-mute">{m.tags.map((t) => `#${t}`).join(" ")}</div>}
+                <div className="bar-track mt-2.5">
+                  <div className="bar-fill" style={{ width: `${Math.max(1, b.value * 100)}%` }} />
+                </div>
+                <div className="t-data mt-1.5 text-[12px] text-mute">{b.detail}</div>
               </div>
             ))}
           </div>
-        )}
-        <div className="mt-5">
-          <div className="eyebrow mb-2">Words parsed · {slang.length}</div>
-          {slang.length === 0 ? (
-            <div className="font-mono text-[12px] text-mute">No words yet. Dialect parsing unlocks at T+16:00.</div>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {slang.map((w) => (
-                <span key={w.term} title={w.definition} className="rounded-[2px] border border-line2 px-2 py-1 font-mono text-[11px] text-ink">
-                  {w.term}
-                  <span className="ml-1.5 text-mute">{fmtAgeShort(w.learnedAtAgeS).replace(" old", "")}</span>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </Module>
-
-      <Module id="people" index="10" title="Known contacts" meta={`${allPeople.length} recognised`}>
-        {allPeople.length === 0 ? (
-          <EmptyState locked title="Recognition offline" detail="From T+14:00 it remembers who talked to it, and when." />
-        ) : (
-          <div className="panel overflow-hidden">
-            <div className="hidden grid-cols-[1.2fr_90px_100px_1.6fr] gap-3 border-b border-line px-4 py-2 font-mono text-[9px] tracking-[0.2em] text-mute uppercase sm:grid">
-              <span>Handle</span>
-              <span>Interactions</span>
-              <span>First met</span>
-              <span>Relationship</span>
-            </div>
-            <ul className="divide-y divide-white/[0.06]">
-              {people.map((p) => (
-                <li key={`${p.platform}:${p.handle}`} className="grid gap-1 px-4 py-3 sm:grid-cols-[1.2fr_90px_100px_1.6fr] sm:items-center sm:gap-3">
-                  <span className="min-w-0 truncate font-mono text-[13px] text-ink">
-                    @{p.handle} <span className="text-[10px] tracking-[0.14em] text-mute uppercase">{p.platform}</span>
-                  </span>
-                  <span className="tnum font-mono text-[12px] text-silver">
-                    {p.interactions}
-                    <span className="text-mute sm:hidden"> interactions</span>
-                  </span>
-                  <span className="tnum font-mono text-[12px] text-dim">
-                    <span className="sm:hidden">first met </span>at {fmtAgeShort(p.firstSeenAgeS).replace(" old", "")}
-                  </span>
-                  <span className="text-[13px] text-dim">{p.relationshipSummary ?? "—"}</span>
-                </li>
-              ))}
-            </ul>
+          {/* subsystems */}
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border border-line bg-line sm:grid-cols-4">
+            {state.anatomy.map((a) => {
+              const until = a.unlockAt !== null && age !== null ? realSeconds(a.unlockAt - Math.max(0, age), state.simSpeed) : null;
+              return (
+                <div key={a.key} className="row-hover bg-black p-4">
+                  <div className="flex items-center gap-2">
+                    <span className={`dot ${a.active ? "text-glow shadow-[0_0_8px_rgba(207,230,255,0.9)]" : a.partial ? "text-silver" : "text-faint"}`} />
+                    <span className={`t-label ${a.active ? "text-ink" : ""}`}>{a.label}</span>
+                  </div>
+                  <div className="t-data mt-3 text-[12px] text-dim">{a.active ? "online" : until !== null && until > 0 ? `in ${fmtCountdown(until)}` : a.partial ? "partial" : "locked"}</div>
+                </div>
+              );
+            })}
           </div>
-        )}
-        <More total={allPeople.length} shown={pn} onClick={() => setPn(1000)} />
-      </Module>
-    </div>
-  );
-}
+        </Reveal>
 
-// ── 11. Vital signs ─────────────────────────────────────────────────────────
-export function Vitals() {
-  const { age, state } = useAge(1000);
-  if (!state) return null;
-  const v = state.vitals;
-  const items: [string, string, string?][] = [
-    ["Uptime", fmtAgeShort(age !== null && age >= 0 ? age : null).replace(" old", "")],
-    ["Market cap", fmtUsd(v.mcapUsd)],
-    ["Liquidity", fmtUsd(v.liquidityUsd)],
-    ["Holders", v.holders?.toLocaleString() ?? "—"],
-    ["Treasury", v.treasurySol !== null ? v.treasurySol.toFixed(3) : "—", "SOL"],
-    ["Mentions", v.mentions.toLocaleString()],
-    ["Memories", v.memories.toLocaleString()],
-    ["Words parsed", v.wordsLearned.toLocaleString()],
-  ];
-  return (
-    <Module id="treasury" index="11" title="Readouts">
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[3px] border border-line bg-line sm:grid-cols-4">
-        {items.map(([k, val, unit]) => (
-          <div key={k} className="bg-base px-4 py-4">
-            <div className="eyebrow">{k}</div>
-            <div className="tnum mt-2 truncate font-mono text-[clamp(1.1rem,2.4vw,1.6rem)] text-ink">
-              {val}
-              {unit && <span className="ml-1 text-[10px] tracking-[0.16em] text-dim">{unit}</span>}
-            </div>
+        <Reveal delay={80} className="panel flex min-h-[420px] flex-col overflow-hidden lg:col-span-5">
+          <div className="flex gap-1 border-b border-line px-3 py-2.5" role="tablist">
+            {(
+              [
+                ["memory", `Memory ${memories.length}`],
+                ["contacts", `Contacts ${people.length}`],
+                ["words", `Words ${slang.length}`],
+              ] as const
+            ).map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={tab === k} className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>
+                {label}
+              </button>
+            ))}
           </div>
-        ))}
+          <div className="scroll-thin max-h-[460px] flex-1 overflow-y-auto">
+            {tab === "memory" &&
+              (memories.length === 0 ? (
+                <p className="p-5 text-[14px] text-dim">Long-term memory mounts at T+14:00 and backfills its first minutes.</p>
+              ) : (
+                <ul className="divide-y divide-white/[0.05]">
+                  {memories.map((m) => (
+                    <li key={m.id} className="row-hover px-5 py-4">
+                      <div className="t-label mb-1.5 flex gap-3">
+                        <span className="text-glow">{m.kind}</span>
+                        <span className="tnum">{fmtAgeShort(m.ageS)}</span>
+                        {m.userHandle && <span className="normal-case">@{m.userHandle}</span>}
+                      </div>
+                      <div className="text-[15px] leading-snug text-ink">{m.content}</div>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            {tab === "contacts" &&
+              (people.length === 0 ? (
+                <p className="p-5 text-[14px] text-dim">From T+14:00 it remembers who talked to it, and when.</p>
+              ) : (
+                <ul className="divide-y divide-white/[0.05]">
+                  {people.map((p) => (
+                    <li key={`${p.platform}:${p.handle}`} className="row-hover px-5 py-4">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="truncate font-mono text-[14px] text-ink">@{p.handle}</span>
+                        <span className="t-data shrink-0 text-[12px] text-mute">
+                          {p.interactions}× · met at {fmtAgeShort(p.firstSeenAgeS)}
+                        </span>
+                      </div>
+                      {p.relationshipSummary && <div className="mt-1 text-[14px] text-dim">{p.relationshipSummary}</div>}
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            {tab === "words" &&
+              (slang.length === 0 ? (
+                <p className="p-5 text-[14px] text-dim">Dialect parsing unlocks at T+16:00.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2 p-5">
+                  {slang.map((w) => (
+                    <span key={w.term} title={w.definition} className="rounded-full border border-line2 px-3 py-1.5 font-mono text-[12px] text-ink">
+                      {w.term}
+                    </span>
+                  ))}
+                </div>
+              ))}
+          </div>
+        </Reveal>
       </div>
     </Module>
   );
 }
 
-// ── 12. Token ───────────────────────────────────────────────────────────────
+// ── 05 Token ───────────────────────────────────────────────────────────────
 export function Token() {
-  const token = useStore((s) => s.state?.token);
+  const state = useStore((s) => s.state);
   const [copied, setCopied] = useState(false);
-  if (!token) return null;
+  if (!state) return null;
+  const token = state.token;
   const ca = token.mint;
+  const v = state.vitals;
   return (
-    <Module id="token" index="12" title="Token" meta={token.symbol ? `$${token.symbol}` : undefined}>
-      <div className="panel panel-ticks flex flex-col gap-5 px-4 py-5 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="eyebrow mb-2">Contract address</div>
-          <div className="break-all font-mono text-[13px] text-ink sm:text-[15px]">{ca ?? "Revealed with root access"}</div>
+    <Module id="token" index="05" title="Token" meta={token.symbol ? `$${token.symbol}` : undefined}>
+      <Reveal className="panel p-5 sm:p-8">
+        <div className="t-label mb-3">Contract address</div>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="t-data break-all text-[18px] leading-snug text-ink sm:text-[24px]">{ca ?? "revealed with root access"}</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              disabled={!ca}
+              aria-live="polite"
+              onClick={() => ca && navigator.clipboard?.writeText(ca).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))}
+              className="btn btn-solid"
+            >
+              <Icon name={copied ? "check" : "copy"} className="h-3.5 w-3.5" />
+              {copied ? "Copied" : "Copy CA"}
+            </button>
+            {token.xHandle && <Ext href={`https://x.com/${token.xHandle}`}>X</Ext>}
+            {ca && <Ext href={`https://dexscreener.com/solana/${ca}`}>DexScreener</Ext>}
+            {ca && <Ext href={`https://pump.fun/coin/${ca}`}>pump.fun</Ext>}
+            {ca && <Ext href={`https://solscan.io/token/${ca}`}>Solscan</Ext>}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            disabled={!ca}
-            aria-live="polite"
-            onClick={() => {
-              if (!ca) return;
-              navigator.clipboard?.writeText(ca).then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              });
-            }}
-            className="btn btn-solid"
-          >
-            <Icon name={copied ? "check" : "copy"} className="h-3.5 w-3.5" />
-            {copied ? "Copied" : "Copy CA"}
-          </button>
-          {token.xHandle && <Ext href={`https://x.com/${token.xHandle}`}>X</Ext>}
-          {ca && <Ext href={`https://dexscreener.com/solana/${ca}`}>DexScreener</Ext>}
-          {ca && <Ext href={`https://pump.fun/coin/${ca}`}>pump.fun</Ext>}
-          {ca && <Ext href={`https://solscan.io/token/${ca}`}>Solscan</Ext>}
+        <div className="hair my-8" />
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          {(
+            [
+              ["Market cap", fmtUsd(v.mcapUsd)],
+              ["Liquidity", fmtUsd(v.liquidityUsd)],
+              ["Holders", v.holders?.toLocaleString() ?? "—"],
+              ["Mentions", v.mentions.toLocaleString()],
+            ] as const
+          ).map(([k, val]) => (
+            <div key={k}>
+              <div className="t-label">{k}</div>
+              <div className="t-data mt-2 text-[22px] text-ink">{val}</div>
+            </div>
+          ))}
         </div>
-      </div>
+      </Reveal>
     </Module>
   );
 }
