@@ -1,11 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { enableChatFeed, useStore, type ChatLine } from "../store";
+import { enableChatFeed, useStore } from "../store";
 import { useAge, realSeconds } from "../hooks";
 import { fmtUsd, timeOf } from "../format";
 import { regionActivity } from "../brain/regions";
 import { initialTier } from "../brain/QuantumBrain";
 import { StaticBrain } from "../brain/BrainStage";
-import { monitorTransform, parseStreamParams, streamQuery, typedLength, type StreamParams } from "./params";
+import { lineOpacity, monitorTransform, parseStreamParams, streamQuery, type StreamParams } from "./params";
+import { scheduleFeed, typingEndsAt, visibleChars, type FeedLine } from "./feed";
 
 const QuantumBrain = lazy(() => import("../brain/QuantumBrain"));
 
@@ -39,52 +40,37 @@ function useTicker(active: boolean) {
   }, [active]);
 }
 
-interface FeedLine {
-  key: string;
-  kind: "in" | "out";
-  from: string;
-  text: string;
-  liveAt: number | null;
-}
-
-/** Replies type out one after another: a reply starts when the previous one has finished. */
-function schedule(lines: FeedLine[], cps: number) {
-  let free = 0;
-  return lines.map((l) => {
-    if (l.kind !== "out" || l.liveAt === null) return { ...l, startAt: null as number | null };
-    const startAt = Math.max(l.liveAt, free);
-    free = startAt + (l.text.length / cps) * 1000 + 250;
-    return { ...l, startAt };
-  });
-}
-
 function Monitor({ p, lines, title }: { p: StreamParams; lines: FeedLine[]; title: string }) {
-  const sched = useMemo(() => schedule(lines, p.cps), [lines, p.cps]);
-  const typingUntil = sched.reduce((m, l) => (l.startAt !== null ? Math.max(m, l.startAt + (l.text.length / p.cps) * 1000) : m), 0);
+  const sched = useMemo(() => scheduleFeed(lines, p.cps), [lines, p.cps]);
   const now = Date.now();
-  useTicker(typingUntil > now);
+  useTicker(typingEndsAt(sched, p.cps) > now);
+  // newest at the bottom, at most p.lines on screen; older ones fade out
+  const visible = sched.filter((l) => visibleChars(l, now, p.cps) >= 0).slice(-p.lines);
   return (
     <div className="flex h-full w-full flex-col overflow-hidden" style={{ fontSize: p.fs }}>
-      <div className="stream-mon-bar flex items-center gap-2 px-[0.8em] py-[0.35em] text-[0.62em]">
-        <span className="h-[0.7em] w-[0.7em] rounded-full bg-[#ff5f57]/70" />
-        <span className="h-[0.7em] w-[0.7em] rounded-full bg-[#febc2e]/60" />
-        <span className="h-[0.7em] w-[0.7em] rounded-full bg-[#28c840]/60" />
+      <div className="stream-mon-bar flex items-center gap-2 px-[0.7em] py-[0.3em] text-[0.6em]">
+        <span className="h-[0.6em] w-[0.6em] rounded-full bg-white/25" />
+        <span className="h-[0.6em] w-[0.6em] rounded-full bg-white/15" />
+        <span className="h-[0.6em] w-[0.6em] rounded-full bg-white/10" />
         <span className="ml-2 truncate">{title}</span>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col justify-end gap-[0.3em] overflow-hidden px-[0.8em] pb-[0.6em] pt-[0.3em] leading-[1.3]">
-        {sched.slice(-14).map((l) => {
+      <div className="flex min-h-0 flex-1 flex-col justify-end gap-[0.18em] overflow-hidden px-[0.7em] pb-[0.5em] pt-[0.2em] leading-[1.28] [mask-image:linear-gradient(to_bottom,transparent,#000_1.6em)]">
+        {visible.map((l, i) => {
+          const op = lineOpacity(visible.length - 1 - i, p.lines);
+          const style = { opacity: op, transition: "opacity 600ms cubic-bezier(.2,.7,0,1)" };
           if (l.kind === "in")
             return (
-              <div key={l.key} className="stream-in break-words">
+              <div key={l.key} className="stream-in break-words" style={style}>
                 <span className="stream-from">{l.from}&gt;</span> {l.text}
               </div>
             );
-          const shown = l.startAt === null ? l.text.length : now < l.startAt ? -1 : typedLength(l.text, now - l.startAt, p.cps);
-          if (shown < 0) return null;
-          const typing = shown < l.text.length;
+          const n = visibleChars(l, now, p.cps);
+          const typing = n < l.maxLen;
+          const text = l.text.slice(0, n) + (l.cut && !typing ? "…" : "");
+          const probe = l.kind === "probe-q" || l.kind === "probe-a";
           return (
-            <div key={l.key} className="stream-out break-words">
-              <span className="stream-root">root#</span> {l.text.slice(0, shown)}
+            <div key={l.key} className={`${probe ? "stream-probe-line" : "stream-out"} break-words`} style={style}>
+              {probe && <span className="stream-probe">[probe]</span>} {l.kind === "probe-q" ? null : <span className="stream-root">root#</span>} {text}
               {typing && <span className="stream-caret">▌</span>}
             </div>
           );
@@ -94,6 +80,42 @@ function Monitor({ p, lines, title }: { p: StreamParams; lines: FeedLine[]; titl
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Seamless loop: two stacked <video> elements. The next one is pre-rolled at frame 0 (decoded, paused) and swapped
+ * in on "ended", so the loop point never shows a seek stall or a black frame.
+ */
+function LoopVideo({ src }: { src: string }) {
+  const a = useRef<HTMLVideoElement>(null);
+  const b = useRef<HTMLVideoElement>(null);
+  const [front, setFront] = useState(0);
+  useEffect(() => {
+    const vids = [a.current!, b.current!];
+    let cur = 0;
+    vids[0].play().catch(() => undefined);
+    const onEnded = (i: number) => () => {
+      if (i !== cur) return;
+      const next = vids[1 - i];
+      next.play().catch(() => undefined);
+      cur = 1 - i;
+      setFront(cur);
+      // rewind the finished one so it is ready (decoded at frame 0) for the next swap
+      const done = vids[i];
+      done.pause();
+      done.currentTime = 0;
+    };
+    const handlers = vids.map((_, i) => onEnded(i));
+    vids.forEach((v, i) => v.addEventListener("ended", handlers[i]));
+    return () => vids.forEach((v, i) => v.removeEventListener("ended", handlers[i]));
+  }, [src]);
+  const cls = "absolute inset-0 h-full w-full object-cover";
+  return (
+    <>
+      <video ref={a} className={cls} style={{ opacity: front === 0 ? 1 : 0 }} src={src} muted playsInline preload="auto" />
+      <video ref={b} className={cls} style={{ opacity: front === 1 ? 1 : 0 }} src={src} muted playsInline preload="auto" />
+    </>
   );
 }
 
@@ -107,7 +129,7 @@ function MiniBrain() {
   const key = regionActivity(caps).join("");
   const active = useMemo(() => regionActivity(caps), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="relative h-[300px] w-full overflow-hidden rounded-[12px] border border-glow/15 bg-black">
+    <div className="relative h-[240px] w-full overflow-hidden rounded-[12px] border border-glow/15 bg-black">
       {start && !gaveUp ? (
         <Suspense fallback={null}>
           <QuantumBrain level={dormant ? 0.04 : level} active={active} startTier={start} maxTier="mid" onGiveUp={giveUp} spin={0.2} />
@@ -132,7 +154,7 @@ function Ticker({ side }: { side: "left" | "right" }) {
   const launchIn = state.launchAt ? (new Date(state.launchAt).getTime() - now) / 1000 : null;
   const arcDone = state.arc.beats.filter((b) => b.fired || b.skipped).length;
   return (
-    <aside className={`stream-ticker absolute top-[40px] bottom-[40px] w-[360px] ${side === "left" ? "left-[40px]" : "right-[40px]"} flex flex-col gap-5 p-6`}>
+    <aside className={`stream-ticker absolute top-[36px] bottom-[36px] w-[320px] ${side === "left" ? "left-[32px]" : "right-[32px]"} flex flex-col gap-5 p-6`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <img src="/favicon-32.png" alt="" className="h-9 w-9 rounded-[8px]" />
@@ -193,7 +215,7 @@ const Stat = ({ k, v }: { k: string; v: string }) => (
 );
 
 /** Drag the box, drag the corner to resize, [ ] to rotate (shift = fine). Prints the URL for OBS. */
-function Calibrator({ p, set, scale }: { p: StreamParams; set: (p: StreamParams) => void; scale: number }) {
+function Calibrator({ p, set, scale, streamKey }: { p: StreamParams; set: (p: StreamParams) => void; scale: number; streamKey: string }) {
   const drag = useRef<{ mode: "move" | "size"; x: number; y: number; p: StreamParams } | null>(null);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -221,7 +243,7 @@ function Calibrator({ p, set, scale }: { p: StreamParams; set: (p: StreamParams)
     const dy = (e.clientY - d.y) / scale;
     set(d.mode === "move" ? { ...d.p, x: d.p.x + dx, y: d.p.y + dy } : { ...d.p, w: Math.max(40, d.p.w + dx), h: Math.max(40, d.p.h + dy) });
   };
-  const url = `${location.origin}/stream?${streamQuery(p)}`;
+  const url = `${location.origin}/stream?key=${encodeURIComponent(streamKey)}&${streamQuery(p)}`;
   return (
     <>
       <div
@@ -248,10 +270,10 @@ export default function Stream() {
   const events = useStore((s) => s.events);
   const state = useStore((s) => s.state);
   const connected = useStore((s) => s.connected);
-  const [videoOk, setVideoOk] = useState(true);
+  const streamKey = useMemo(() => new URLSearchParams(location.search).get("key") ?? "", []);
 
   useEffect(() => {
-    enableChatFeed();
+    enableChatFeed(streamKey);
     document.title = "ROOT · stream";
     const b = document.body.style;
     const prev = { overflow: b.overflow, cursor: b.cursor, background: b.background };
@@ -261,7 +283,7 @@ export default function Stream() {
     return () => {
       Object.assign(b, prev);
     };
-  }, [p.calibrate]);
+  }, [p.calibrate, streamKey]);
 
   // hard fallback for long outages (OBS sources can wedge): reload after 60s offline
   useEffect(() => {
@@ -271,36 +293,31 @@ export default function Stream() {
   }, [connected]);
 
   const prelaunch = !state || state.ageS === null || state.ageS < 0;
-  // pre-launch: the monitor shows the breakout transmissions instead of chat. Lines already there on load are
+  // pre-launch: breakout posts + probes about getting out. live: chat + probes. Arc lines already there on load are
   // shown whole; lines that arrive live type out (first-seen time is remembered so re-renders don't restart them).
   const seen = useRef<Map<number, number | null> | null>(null);
   const lines: FeedLine[] = useMemo(() => {
-    if (!prelaunch) return chat as ChatLine[];
+    if (!prelaunch) return chat;
     const arc = events.filter((e) => e.type === "ARC" && e.source === "ROOT");
     if (!seen.current) seen.current = new Map(arc.map((e) => [e.id, null]));
     for (const e of arc) if (!seen.current.has(e.id)) seen.current.set(e.id, Date.now());
-    return arc.map((e) => ({ key: `arc${e.id}`, kind: "out" as const, from: "root", text: e.message, liveAt: seen.current!.get(e.id) ?? null }));
+    const arcLines = arc.map((e) => ({ key: `arc${e.id}`, kind: "arc" as const, from: "", text: e.message, liveAt: seen.current!.get(e.id) ?? null, at: seen.current!.get(e.id) ?? new Date(e.ts).getTime() }));
+    const probes = chat.filter((l) => l.kind === "probe-q" || l.kind === "probe-a").map((l, i) => ({ ...l, at: (l.liveAt ?? 0) + i * 1e-3 }));
+    return [...arcLines, ...probes].sort((x, y) => x.at - y.at);
   }, [prelaunch, chat, events]);
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
       <div className="absolute left-1/2 top-1/2" style={{ width: W, height: H, transform: `translate(-50%, -50%) scale(${scale})`, transformOrigin: "50% 50%" }}>
-        {videoOk ? (
-          <video className="absolute inset-0 h-full w-full object-cover" autoPlay muted loop playsInline>
-            <source src={p.video} type="video/mp4" />
-            {/* fallback for browsers without H.264 (OBS / Chrome play the mp4) */}
-            <source src={p.video.replace(/\.mp4$/, ".webm")} type="video/webm" onError={() => setVideoOk(false)} />
-          </video>
-        ) : (
-          <div className="stream-novideo absolute inset-0" />
-        )}
+        <div className="stream-novideo absolute inset-0" />
+        <LoopVideo src={p.video} />
 
         <div className="stream-monitor absolute" style={{ left: p.x, top: p.y, width: p.w, height: p.h, transform: monitorTransform(p), transformOrigin: "50% 50%" }}>
           <Monitor p={p} lines={lines} title={prelaunch ? "root@system:~# tail -f breakout.log" : "root@root:~# tail -f /var/chat"} />
         </div>
 
         {p.ticker !== "off" && <Ticker side={p.ticker} />}
-        {p.calibrate && <Calibrator p={p} set={setP} scale={scale} />}
+        {p.calibrate && <Calibrator p={p} set={setP} scale={scale} streamKey={streamKey} />}
       </div>
     </div>
   );

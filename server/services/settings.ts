@@ -22,6 +22,10 @@ export interface Settings {
   /** pre-launch arc: real seconds between beats */
   arcSpacingS: number;
   arcPaused: boolean;
+  /** /stream self-probes on/off (admin) */
+  probesEnabled: boolean;
+  /** probe LLM spend for the current UTC day */
+  probeSpend: { day: string; usd: number };
 }
 
 const defaults = (): Settings => ({
@@ -39,6 +43,8 @@ const defaults = (): Settings => ({
   arcStartAt: null,
   arcSpacingS: DEFAULT_ARC_SPACING_S,
   arcPaused: false,
+  probesEnabled: true,
+  probeSpend: { day: "", usd: 0 },
 });
 
 let cache: Settings = defaults();

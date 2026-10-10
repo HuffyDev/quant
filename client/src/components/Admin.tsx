@@ -22,7 +22,7 @@ const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], 
 export function Admin() {
   const [token, setToken] = useState(read);
   const [log, setLog] = useState<string[]>([]);
-  const [status, setStatus] = useState<{ ageS: number | null; queue: unknown; arc: ArcAdmin } | null>(null);
+  const [status, setStatus] = useState<{ ageS: number | null; queue: unknown; arc: ArcAdmin; probes?: { enabled: boolean; spentTodayUsd: number; budgetUsd: number; streamKeySet: boolean } } | null>(null);
   const state = useStore((s) => s.state);
   const [launchAt, setLaunchAt] = useState("");
   const [mint, setMint] = useState("");
@@ -75,6 +75,13 @@ export function Admin() {
           <Btn danger={!f?.chatPaused} onClick={() => toggle("chatPaused", !f?.chatPaused)}>{f?.chatPaused ? "RESUME CHAT" : "PAUSE CHAT"}</Btn>
           <Btn danger={!f?.treasuryFrozen} onClick={() => toggle("treasuryFrozen", !f?.treasuryFrozen)}>{f?.treasuryFrozen ? "UNFREEZE TREASURY" : "FREEZE TREASURY"}</Btn>
           <Btn danger={!!f?.autonomyEnabled} onClick={() => toggle("autonomyEnabled", !f?.autonomyEnabled)}>{f?.autonomyEnabled ? "DISABLE AUTONOMOUS LOOP" : "ENABLE AUTONOMOUS LOOP"}</Btn>
+        </Card>
+
+        <Card title="Stream self-probes (/stream only)">
+          <Btn danger={!!status?.probes?.enabled} onClick={() => toggle("probesEnabled", !status?.probes?.enabled)}>{status?.probes?.enabled ? "DISABLE SELF-PROBES" : "ENABLE SELF-PROBES"}</Btn>
+          <div className="text-dim">
+            spend today ${status?.probes ? status.probes.spentTodayUsd.toFixed(3) : "—"} of ${status?.probes?.budgetUsd ?? "—"} · STREAM_KEY {status?.probes?.streamKeySet ? "set" : "NOT SET (/stream disabled)"}
+          </div>
         </Card>
 
         <Card title="Launch (final beat: root access granted + CA)">

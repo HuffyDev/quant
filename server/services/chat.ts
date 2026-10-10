@@ -5,6 +5,7 @@ import { chatMessages } from "../db/schema";
 import { hasCap } from "./capabilities";
 import { ageS } from "./clock";
 import { broadcast, emit } from "./events";
+import { notifyRealChat } from "./probes";
 import { filterPublicText } from "./contentFilter";
 import { logInteraction, getPerson, interactionsWith } from "./memory";
 import { runTask, voiceTier } from "./orchestrator";
@@ -52,6 +53,7 @@ export async function chat(ip: string, message: string, handle?: string): Promis
   const text = message.trim().slice(0, 280);
   inflight++;
   const inboundId = `${Date.now().toString(36)}-${++inboundSeq}`;
+  notifyRealChat();
   broadcast("chat:in", { id: inboundId, from: h ? `@${h}` : "visitor", text: publicInbound(text), ts: new Date().toISOString() });
   try {
     const known = h && hasCap("RECOGNIZE_USERS") ? await getPerson(h) : null;

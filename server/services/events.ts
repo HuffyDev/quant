@@ -19,6 +19,15 @@ export function broadcast(channel: string, payload: unknown) {
   io?.emit(channel, payload);
 }
 
+/** Room-scoped push (e.g. "stream": only authenticated /stream overlays). */
+export function broadcastTo(room: string, channel: string, payload: unknown) {
+  io?.to(room).emit(channel, payload);
+}
+
+export function roomSize(room: string): number {
+  return io?.sockets.adapter.rooms.get(room)?.size ?? 0;
+}
+
 export interface EmitInput {
   type: EventType;
   source: Source;

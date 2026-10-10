@@ -33,6 +33,9 @@ Every variable is listed in [`.env.example`](./.env.example) with a placeholder.
 |---|---|---|---|
 | `MODE` | `sim` | `live` | `sim` uses mock X / market / chain / executor with a seeded simulated token. `live` uses the real APIs. |
 | `SIM_SPEED` | optional | ignored | Schedule speed in sim (default 10 = first hour in 6 real min; 1 = real pace). Clocks and time labels always show real elapsed time. Ignored in live. The pre-launch arc always runs in real time at the spacing you set. |
+| `STREAM_KEY` | optional | **required for the livestream** | Secret for the OBS overlay: `/stream?key=STREAM_KEY`. Unset or wrong key → 404. Generate: `openssl rand -hex 24`. |
+| `PROBE_DAILY_BUDGET_USD` | optional | optional | Daily LLM spend cap for stream self-probes (default `3`). |
+| `PROBE_MODEL_TIER` | optional | optional | `cheap` (default, `LLM_MODEL_CHEAP`) or `main` (`LLM_MODEL_MAIN`) for self-probes. |
 | `PUBLIC_SITE_URL` | optional | recommended | Public origin, e.g. `https://root.example`. Used for absolute OG/Twitter image URLs (link previews need them). |
 | `DATABASE_URL` | **required** | **required** | Replit → Tools → Database → PostgreSQL (set automatically). Neon also works. |
 | `ADMIN_TOKEN` | **required** for /admin | **required** | Generate it yourself: `openssl rand -hex 32`. Protects `/admin` and `/admin/api/*`. |
@@ -139,7 +142,7 @@ Validate the real APIs and the real swap path with a **tiny throwaway token** on
    - Each beat's post is written by the LLM from a fixed directive (`server/config/arc.ts`). Progress readouts (`privilege escalation 12% / 61% / 99%`, `almost out`) are **enforced verbatim**: output that drops or alters them is regenerated (3 tries), never posted.
    - Posts go through the same kill switch, content filter and X budget as everything else.
    - If the server was down, only the latest overdue beat posts; older ones are logged as skipped.
-3. **Before** launch: set `TOKEN_MINT` in `/admin` (the final beat posts it). The site shows DORMANT and the breakout log; `/stream` shows the transmissions on the monitor.
+3. **Before** launch: set `TOKEN_MINT` in `/admin` (the final beat posts it). The site shows DORMANT and the breakout log; the stream overlay shows the transmissions (and self-probes about getting out) on the monitor.
 4. Deploy as a **Reserved VM**.
 5. Press **LAUNCH NOW** (or set `LAUNCH_TIMESTAMP`). Any beats not yet posted are skipped, and T+0 posts the one fixed line: `root access granted` + newline + the CA. Everything after that is generated from live data.
 6. Keep `/admin` open. Kill switches: **pause X posting**, **pause chat**, **freeze treasury**, **disable autonomous loop**, **pause arc**, **force-skip a step / beat**, **set LAUNCH_TIMESTAMP / TOKEN_MINT**. Every use is logged publicly as `HUMAN SAFETY OVERRIDE ACTIVATED`.
@@ -152,16 +155,24 @@ Validate the real APIs and the real swap path with a **tiny throwaway token** on
 |---|---|
 | `/` | Main site: quantum brain hero, breakout log (pre-launch), console, chat, actions, proposals, timeline, memories, contacts, readouts, token. |
 | `/core` | **QUANTUM CORE**: full-screen interactive brain. Drag to rotate (any direction), scroll/pinch to zoom (clamped), damping, auto-rotate after 4s idle. Every event is a pin on its region (X posts/replies → SOCIAL, buybacks → TREASURY, arc beats → BREACH crown, memories → MEMORY, proposals → DECISIONS, market reads → MARKET, Guardian rejections → red). Filters, pin card with proof link, replay scrubber, clustering. Falls back to a filterable list without WebGL. |
-| `/stream` | 1920×1080 OBS browser source (see below). |
+| `/stream?key=STREAM_KEY` | Private 1920×1080 OBS browser source (see below). Not linked anywhere, `noindex`; without the right key it returns 404. |
 | `/admin` | Operator console. |
 
-**Livestream (OBS → pump.fun):** add a *Browser* source, 1920×1080, URL `https://<site>/stream`. The live site chat is drawn onto the monitor in the video, and ROOT's replies type out (before launch it shows the breakout transmissions instead). Calibrate once: open `https://<site>/stream?calibrate=1` in a normal browser, drag the box onto the monitor, drag its corner to resize, `[` `]` to rotate, arrows to nudge, then copy the printed URL into OBS. Params: `x y w h rotate skewX skewY rx ry fs cps ticker=right|left|off quality=high|mid|low|static`. The page reconnects by itself and reloads after 60s offline.
+**Livestream (OBS → pump.fun):**
+1. Set `STREAM_KEY` (Secrets) to a long random string, e.g. `openssl rand -hex 24`. Unset = the overlay is disabled (404).
+2. In OBS add a *Browser* source, 1920×1080, URL `https://<site>/stream?key=<STREAM_KEY>`. Anyone without the key gets a 404; the page is `noindex`. Treat the URL like a password.
+3. The monitor in the video shows (newest at the bottom, max 8 lines, older lines fade, ≥22px text at 1080p):
+   - **before LAUNCH NOW:** the breakout posts as they go out, plus self-probes about getting out;
+   - **after launch:** the live site chat (visitor messages appear instantly, ROOT's replies type out) plus self-probes.
+4. **Self-probes:** when no real chat message has arrived for a random 20–40s, ROOT asks itself one short question and answers it, both typed out and labelled `[probe]` (never a username). They exist only on this overlay: never in the public chat, never stored as events, memories, people or interactions, never counted in stats. They pass the same content filter as everything ROOT says. A real message always wins: it cuts a probe mid-typing, drops queued probes, and resets the quiet timer. `/admin → Stream self-probes` turns them on/off (default on) and shows today's spend; `PROBE_DAILY_BUDGET_USD` caps their LLM spend (default $3/day, UTC), `PROBE_MODEL_TIER` picks the model (`cheap` = `LLM_MODEL_CHEAP`, default; `main` = `LLM_MODEL_MAIN`). Probes only run while at least one keyed overlay is connected.
+5. Calibrate once (the defaults already fit `public/media/hacker.mp4`, inset from his shoulder): open `https://<site>/stream?key=<STREAM_KEY>&calibrate=1` in a normal browser, drag the box onto the monitor, drag its corner to resize, `[` `]` to rotate, arrows to nudge, then copy the printed URL (it keeps the key) into OBS. Params: `x y w h rotate skewX skewY rx ry fs lines cps ticker=left|right|off quality=high|mid|low|static`.
+6. The video loops seamlessly (two pre-rolled players swap at the loop point). The page reconnects by itself and reloads after 60s offline.
 
 **Media (placeholders included, replace with yours, same paths):**
 - `public/root.png`: logo and static brain fallback. Square 1024px, brain ≈60% of the frame on pure black. Derived from it: `favicon.ico` (16/32/48), `favicon-32.png`, `apple-touch-icon.png` (180) and `og.png` (1200×630 link preview). If you replace `root.png`, regenerate those (ImageMagick commands in the commit that added them).
 - **The brain is sampled from `root.png` by default**: its bright pixels become a luminous point cloud (density and node size follow the image's brightness, with depth for volume), and the image itself glows behind it. It is front-facing, so `/core` limits rotation to ±55°.
 - `public/models/brain.glb` (optional): add a real brain mesh to replace the image cloud and unlock full rotation on `/core`. Uncompressed or meshopt (no Draco), any units (centred and normalised), front = +Z, up = +Y (glTF convention). The check happens at **build time**, so rebuild (Replit's Run does) after adding it.
-- `public/stream/hacker.mp4`: 1920×1080 H.264 loop. Also replace or delete `public/stream/hacker.webm` (VP9 fallback for browsers without H.264).
+- `public/media/hacker.mp4`: the stream video, 1920×1080 H.264, seamlessly looped, no audio. If you replace it with different framing, re-calibrate the monitor box.
 - `npm run placeholders` regenerates missing placeholder media (`-- --force` overwrites; `-- --glb` also writes a procedural placeholder GLB, normally not wanted).
 
 **First visit:** a ~2.5s boot sequence (once per browser session, skippable with any key/click, skipped with reduced motion) types a few lines and powers the brain on node by node.
@@ -202,8 +213,9 @@ server/
 shared/pins.ts             event → /core pin mapping (used by server history + client live)
 client/src/brain/          quantum brain: GLB/procedural cloud, shaders, bloom, regions, adaptive quality
 client/src/core/           /core page: orbit controls, pin overlay, clustering, scrubber
-client/src/stream/         /stream OBS page
-public/                    root.png, models/brain.glb, stream/hacker.mp4 (+ .webm)
+client/src/stream/         /stream OBS page (feed.ts = monitor typing/priority logic)
+server/services/probes.ts  stream-only self-probes (quiet timer, filter, daily spend cap)
+public/                    root.png, favicons, og.png, media/hacker.mp4
 ```
 
 **Wiring Day 1–6 later:** implement the task handler in `server/services/tasks/index.ts`, set the step's `task`, and flip `wired: true` in `server/config/timeline.ts`. Nothing else changes. The site already renders them as LOCKED with countdowns.
@@ -233,8 +245,8 @@ npm start           # production start (expects a prior `npm run build`)
 npm run build       # build frontend to dist/
 npm run dev         # server only, watch mode
 npm run dev:client  # Vite dev server on :5173 (proxies /api, /admin/api, /socket.io to :5000)
-npm test            # unit tests (Guardian, executor checks, content/fiction filter, gating, timeline, arc, pins, clustering, stream params, sim world)
-TEST_ADMIN_DATABASE_URL=postgres://user:pass@host/postgres npm test   # + migration integration tests (needs CREATE DATABASE)
+npm test            # unit tests (Guardian, executor checks, content/fiction filter, gating, timeline, arc, pins, clustering, stream params/feed/key, sim world)
+TEST_ADMIN_DATABASE_URL=postgres://user:pass@host/postgres npm test   # + migration tests and the production-build boot test (/, /core, /stream?key=…) (needs CREATE DATABASE)
 TEST_DATABASE_URL=postgres://user:pass@host/throwaway npm test         # + sim integration: arc → launch → final beat (TRUNCATEs that DB)
 npm run placeholders  # regenerate missing placeholder media
 npm run check:live  # read-only PASS/FAIL check of every real API (see §4)

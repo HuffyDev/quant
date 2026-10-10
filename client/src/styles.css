@@ -602,3 +602,6 @@ body {
   .grain, .scan-sweep { display: none; }
   .reveal { opacity: 1; transform: none; }
 }
+/* self-probes on the /stream monitor: ROOT talking to itself, visibly labelled */
+.stream-probe { color: #6f8fae; font-weight: 500; letter-spacing: 0.02em; }
+.stream-probe-line { color: #b7cbe0; }

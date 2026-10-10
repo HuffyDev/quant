@@ -4,15 +4,10 @@ import type { PublicEvent, PublicState } from "@shared/types";
 import { setDisplaySpeed } from "./format";
 import { pulseFor, type Pulse } from "./brain/regions";
 
-/** One line of the web chat as the stream overlay shows it. */
-export interface ChatLine {
-  key: string;
-  kind: "in" | "out";
-  from: string;
-  text: string;
-  /** client ms when it arrived live (null = history, shown without typing) */
-  liveAt: number | null;
-}
+import type { FeedLine } from "./stream/feed";
+
+/** One line of the /stream monitor feed (web chat + self-probes). */
+export type ChatLine = FeedLine;
 
 interface Store {
   state: PublicState | null;
@@ -44,6 +39,7 @@ export function onPulse(fn: (p: Pulse) => void) {
 
 // ── web chat feed for /stream ──
 let chatFeed = false;
+let streamKey: string | null = null;
 const CHAT_MAX = 60;
 async function loadChatHistory() {
   try {
@@ -58,11 +54,16 @@ async function loadChatHistory() {
     /* offline: keep what we have */
   }
 }
-/** Turn on the chat feed (stream overlay). Loads recent history and resyncs it on every reconnect. */
-export function enableChatFeed() {
+/**
+ * Turn on the chat feed (stream overlay). Loads recent history and resyncs it on every reconnect. With the stream key
+ * the socket also joins the server's "stream" room, the only place self-probes are sent.
+ */
+export function enableChatFeed(key?: string | null) {
   if (chatFeed) return;
   chatFeed = true;
+  streamKey = key ?? null;
   void loadChatHistory();
+  if (socket?.connected && streamKey) socket.emit("stream:join", streamKey);
 }
 const pushChat = (l: ChatLine) => set({ chat: [...store.chat.filter((x) => x.key !== l.key), l].slice(-CHAT_MAX) });
 
@@ -72,9 +73,20 @@ export function connect() {
   socket.on("connect", () => {
     set({ connected: true });
     if (chatFeed) void loadChatHistory();
+    if (chatFeed && streamKey) socket?.emit("stream:join", streamKey);
   });
   socket.on("chat:in", (m: { id: string; from: string; text: string }) => {
-    if (chatFeed) pushChat({ key: `i${m.id}`, kind: "in", from: m.from, text: m.text, liveAt: Date.now() });
+    if (!chatFeed) return;
+    const now = Date.now();
+    // a real message always wins: unfinished probes are cut at this moment (the feed scheduler drops unstarted ones)
+    const chat = store.chat.map((l) => ((l.kind === "probe-q" || l.kind === "probe-a") && l.cutAt == null ? { ...l, cutAt: now } : l));
+    set({ chat: [...chat.filter((x) => x.key !== `i${m.id}`), { key: `i${m.id}`, kind: "in" as const, from: m.from, text: m.text, liveAt: now }].slice(-CHAT_MAX) });
+  });
+  socket.on("probe", (p: { id: string; question: string; answer: string }) => {
+    if (!chatFeed) return;
+    const now = Date.now();
+    pushChat({ key: `${p.id}q`, kind: "probe-q", from: "", text: p.question.replace(/^probe:\s*/i, ""), liveAt: now });
+    pushChat({ key: `${p.id}a`, kind: "probe-a", from: "", text: p.answer, liveAt: now });
   });
   socket.on("disconnect", () => set({ connected: false }));
   socket.on("state", (state: PublicState) => {

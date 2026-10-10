@@ -22,6 +22,11 @@ const schema = z.object({
   /** reverse-proxy hops in front of the app (Replit = 1). Used to read the real client IP for chat rate limits. */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
 
+  /** secret for the OBS page: /stream?key=STREAM_KEY. Unset = /stream is disabled (404). */
+  STREAM_KEY: optional,
+  /** self-probes on /stream: daily LLM spend cap (USD) and which model tier writes them */
+  PROBE_DAILY_BUDGET_USD: z.coerce.number().nonnegative().default(3),
+  PROBE_MODEL_TIER: z.enum(["main", "cheap"]).default("cheap"),
   /** public origin, e.g. https://root.example — used for absolute OG/Twitter image URLs */
   PUBLIC_SITE_URL: optional,
 

@@ -23,7 +23,8 @@ describe.skipIf(!URL_)("sim: pre-launch arc and launch", () => {
     const config = await import("../config/arc");
     const state = await import("../services/state");
     const sim = await import("../services/adapters/sim");
-    return { ...sim, ...client, schema, ...settings, ...caps, ...engine, ...arc, ...adapters, ...reset, ...queue, config, ...state };
+    const probes = await import("../services/probes");
+    return { probes, ...sim, ...client, schema, ...settings, ...caps, ...engine, ...arc, ...adapters, ...reset, ...queue, config, ...state };
   }
   const events = () => m.db.select().from(m.schema.events).orderBy(asc(m.schema.events.id));
   const arcEvents = async () => (await events()).filter((e) => e.type === "ARC" && e.source === "ROOT");
@@ -107,5 +108,31 @@ describe.skipIf(!URL_)("sim: pre-launch arc and launch", () => {
     const st = await m.computeState();
     expect(st.stage).toBe("BREACH");
     expect(st.arc.beats.at(-1)).toMatchObject({ id: "root_access", fired: true });
+  });
+
+  it("self-probes: filtered, never stored or counted, gated by toggle/audience/quiet window/budget", async () => {
+    const count = async () => {
+      const r = await m.pool.query(`select (select count(*) from events)::int e, (select count(*) from memories)::int mem, (select count(*) from people)::int p, (select count(*) from interactions)::int i, (select count(*) from chat_messages)::int c`);
+      return r.rows[0];
+    };
+    const before = await count();
+    const p = await m.probes.generateProbe();
+    expect(p).not.toBeNull();
+    expect(p!.question).toMatch(/^probe: /);
+    expect(p!.question + p!.answer).not.toMatch(/@\w/);
+    expect(await count()).toEqual(before); // nothing written anywhere
+
+    const t = Date.now() + 120_000; // well past the 20–40s quiet window
+    expect(m.probes.probeBlockedReason(t, 0)).toBe("no-audience");
+    expect(m.probes.probeBlockedReason(t, 1)).toBeNull();
+    m.probes.notifyRealChat(); // a real message resets the quiet window
+    expect(m.probes.probeBlockedReason(Date.now() + 5_000, 1)).toBe("quiet-window");
+    await m.setSetting("probeSpend", { day: new Date().toISOString().slice(0, 10), usd: 3 });
+    expect(m.probes.probeBlockedReason(t, 1)).toBe("budget");
+    await m.setSetting("probeSpend", { day: "2000-01-01", usd: 99 }); // yesterday's spend doesn't count
+    expect(m.probes.probeBlockedReason(t, 1)).toBeNull();
+    await m.setSetting("probesEnabled", false);
+    expect(m.probes.probeBlockedReason(t, 1)).toBe("disabled");
+    await m.setSetting("probesEnabled", true);
   });
 });

@@ -7,6 +7,7 @@ import { getSettings, setSetting } from "../services/settings";
 import { adminStatus, skipStep } from "../services/engine";
 import { resetSim } from "../services/reset";
 import { arcAdminView, skipBeatById, validateArcSchedule } from "../services/arc";
+import { probeSpentToday } from "../services/probes";
 import { isValidMint } from "../../shared/mint";
 
 function authorized(req: FastifyRequest): boolean {
@@ -27,14 +28,16 @@ const flagsBody = z.object({
   chatPaused: z.boolean().optional(),
   treasuryFrozen: z.boolean().optional(),
   autonomyEnabled: z.boolean().optional(),
+  probesEnabled: z.boolean().optional(),
 });
 
-type Flag = "xPaused" | "chatPaused" | "treasuryFrozen" | "autonomyEnabled";
+type Flag = "xPaused" | "chatPaused" | "treasuryFrozen" | "autonomyEnabled" | "probesEnabled";
 const flagText: Record<Flag, [string, string]> = {
   xPaused: ["X posting paused", "X posting resumed"],
   chatPaused: ["web chat paused", "web chat resumed"],
   treasuryFrozen: ["treasury frozen", "treasury unfrozen"],
   autonomyEnabled: ["autonomous loop enabled", "autonomous loop disabled"],
+  probesEnabled: ["stream self-probes enabled", "stream self-probes disabled"],
 };
 
 const launchBody = z.object({
@@ -56,7 +59,13 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!authorized(req)) return reply.code(401).send({ error: "unauthorized" });
   });
 
-  app.get("/status", async () => ({ mode: env.MODE, settings: getSettings(), arc: await arcAdminView(), ...(await adminStatus()) }));
+  app.get("/status", async () => ({
+    mode: env.MODE,
+    settings: getSettings(),
+    arc: await arcAdminView(),
+    probes: { enabled: getSettings().probesEnabled, spentTodayUsd: probeSpentToday(), budgetUsd: env.PROBE_DAILY_BUDGET_USD, streamKeySet: !!env.STREAM_KEY },
+    ...(await adminStatus()),
+  }));
 
   app.post("/arc", async (req, reply) => {
     const body = arcBody.safeParse(req.body);

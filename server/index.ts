@@ -24,6 +24,8 @@ import { startAutonomyLoop } from "./services/autonomy";
 import { startReplyLoop } from "./services/replyLoop";
 import { startThoughtLoop } from "./services/thoughtLoop";
 import { loadArc, startArc } from "./services/arc";
+import { startProbes, STREAM_ROOM } from "./services/probes";
+import { streamKeyOk } from "./streamKey";
 import { getSettings, setSetting } from "./services/settings";
 import { isSim } from "./env";
 
@@ -71,10 +73,16 @@ async function main() {
     const site = (env.PUBLIC_SITE_URL ?? "").replace(/\/+$/, "");
     const indexHtml = fs.readFileSync(path.join(dist, "index.html"), "utf8").replaceAll("__SITE_URL__", site);
     const sendIndex = (reply: import("fastify").FastifyReply) => reply.type("text/html; charset=utf-8").header("cache-control", "no-cache").send(indexHtml);
+    // /stream: private OBS page. Explicit route (never the SPA fallback), secret key, never indexed.
+    const streamHtml = indexHtml.replace("<head>", '<head>\n    <meta name="robots" content="noindex, nofollow, noarchive" />');
     await app.register(fastifyStatic, { root: dist, wildcard: false, index: false });
     app.get("/", (_req, reply) => sendIndex(reply));
+    app.get<{ Querystring: { key?: string } }>("/stream", (req, reply) => {
+      if (!streamKeyOk(req.query.key)) return reply.code(404).header("x-robots-tag", "noindex").type("text/plain").send("Not Found");
+      return reply.type("text/html; charset=utf-8").header("cache-control", "no-store").header("x-robots-tag", "noindex, nofollow, noarchive").send(streamHtml);
+    });
     app.setNotFoundHandler((req, reply) => {
-      if (/^\/(api|admin\/api|sim|proof|models|stream|assets)\//.test(req.url)) return reply.code(404).send({ error: "not found" });
+      if (/^\/(api|admin\/api|sim|proof|models|stream|media|assets)\//.test(req.url)) return reply.code(404).send({ error: "not found" });
       return sendIndex(reply);
     });
   }
@@ -91,6 +99,12 @@ async function main() {
   // initial payload is shared by every connecting client (cached ≤1s) so a reconnect storm costs O(1) DB work
   let initial: { at: number; events: Awaited<ReturnType<typeof recentEvents>> } | null = null;
   io.on("connection", async (socket) => {
+    // /stream overlays authenticate with the key to receive self-probes (never sent to public clients)
+    socket.on("stream:join", (key: unknown, ack?: (ok: boolean) => void) => {
+      const ok = streamKeyOk(typeof key === "string" ? key : undefined);
+      if (ok) void socket.join(STREAM_ROOM);
+      if (typeof ack === "function") ack(ok);
+    });
     socket.emit("state", await getState());
     if (!initial || Date.now() - initial.at > 1000) initial = { at: Date.now(), events: await recentEvents(150) };
     socket.emit("events", initial.events);
@@ -98,6 +112,8 @@ async function main() {
 
   startStateBroadcaster();
   startArc();
+  startProbes();
+  if (!env.STREAM_KEY) console.warn("[stream] STREAM_KEY not set: /stream is disabled (404)");
   startEngine();
   startMarketPoller();
   startMentionPoller();

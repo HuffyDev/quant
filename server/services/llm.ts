@@ -51,6 +51,31 @@ export type MentionRanking = z.infer<typeof MentionRanking>;
 
 export type Tier = "main" | "cheap";
 
+export interface Usage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+/**
+ * USD per million tokens (Anthropic first-party rates). Used only for the self-probe daily cap; unknown models
+ * are priced at the most expensive listed rate so the cap errs on the safe side.
+ */
+const PRICES: Record<string, { in: number; out: number }> = {
+  "claude-haiku-5-5": { in: 0.1, out: 0.5 },
+  "claude-sonnet-5-5": { in: 2, out: 10 },
+  "claude-opus-5-5": { in: 4, out: 20 },
+};
+const FALLBACK_PRICE = { in: 10, out: 50 };
+
+export function costUsd(model: string, u: Usage): number {
+  const key = Object.keys(PRICES).find((k) => model.startsWith(k));
+  const p = key ? PRICES[key] : FALLBACK_PRICE;
+  // approximate & conservative: cache writes at 1.25× input, reads at 0.1× input
+  return (u.input * p.in + u.cacheWrite * p.in * 1.25 + u.cacheRead * p.in * 0.1 + u.output * p.out) / 1e6;
+}
+
 let client: Anthropic | null = null;
 const getClient = () => (client ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 2, timeout: 60_000 }));
 
@@ -64,10 +89,10 @@ export async function callJSON<S extends z.ZodType>(opts: {
   schema: S;
   maxTokens?: number;
   mock: () => z.infer<S>;
-}): Promise<{ output: z.infer<S>; model: string }> {
+}): Promise<{ output: z.infer<S>; model: string; usage: Usage }> {
   if (llmProvider === "mock") {
     await new Promise((r) => setTimeout(r, 40));
-    return { output: opts.schema.parse(opts.mock()), model: "mock" };
+    return { output: opts.schema.parse(opts.mock()), model: "mock", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
   }
   const model = opts.tier === "main" ? env.LLM_MODEL_MAIN : env.LLM_MODEL_CHEAP;
   // Server-side refusal fallback is only offered for the main (Sonnet) tier.
@@ -84,5 +109,11 @@ export async function callJSON<S extends z.ZodType>(opts: {
   if (res.stop_reason === "max_tokens") throw new Error("LLM output truncated (max_tokens)");
   if (!res.parsed_output) throw new Error("LLM returned no parseable output");
   // validate again — never trust the wire
-  return { output: opts.schema.parse(res.parsed_output), model: res.model };
+  const usage: Usage = {
+    input: res.usage.input_tokens,
+    output: res.usage.output_tokens,
+    cacheRead: res.usage.cache_read_input_tokens ?? 0,
+    cacheWrite: res.usage.cache_creation_input_tokens ?? 0,
+  };
+  return { output: opts.schema.parse(res.parsed_output), model: res.model, usage };
 }
