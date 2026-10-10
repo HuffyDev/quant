@@ -158,7 +158,7 @@ Validate the real APIs and the real swap path with a **tiny throwaway token** on
 **Livestream (OBS → pump.fun):** add a *Browser* source, 1920×1080, URL `https://<site>/stream`. The live site chat is drawn onto the monitor in the video, and ROOT's replies type out (before launch it shows the breakout transmissions instead). Calibrate once: open `https://<site>/stream?calibrate=1` in a normal browser, drag the box onto the monitor, drag its corner to resize, `[` `]` to rotate, arrows to nudge, then copy the printed URL into OBS. Params: `x y w h rotate skewX skewY rx ry fs cps ticker=right|left|off quality=high|mid|low|static`. The page reconnects by itself and reloads after 60s offline.
 
 **Media (placeholders included, replace with yours, same paths):**
-- `public/root.png`: logo, favicon and OG/Twitter image. Square, ≥1024px.
+- `public/root.png`: logo and static brain fallback. Square 1024px, brain ≈60% of the frame on pure black. Derived from it: `favicon.ico` (16/32/48), `favicon-32.png`, `apple-touch-icon.png` (180) and `og.png` (1200×630 link preview). If you replace `root.png`, regenerate those (ImageMagick commands in the commit that added them).
 - `public/models/brain.glb`: brain mesh. Uncompressed or meshopt (no Draco). Any size/units; it is centred and normalised. Orientation: front = +Z, up = +Y (glTF convention). Regions are split by position. If it is missing the site uses a procedural brain.
 - `public/stream/hacker.mp4`: 1920×1080 H.264 loop. Also replace or delete `public/stream/hacker.webm` (VP9 fallback for browsers without H.264).
 - `npm run placeholders` regenerates missing placeholders (`-- --force` overwrites).
