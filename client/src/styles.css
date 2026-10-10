@@ -96,6 +96,15 @@ body {
   letter-spacing: -0.055em;
   color: #fff;
 }
+/* pre-launch headline: quiet, not alarming */
+.t-hero-calm {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.75rem, 3.6vw, 2.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  color: #fff;
+}
 .t-h2 {
   font-family: var(--font-display);
   font-weight: 500;

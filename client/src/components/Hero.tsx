@@ -170,24 +170,21 @@ export function Hero() {
       <div className="relative z-[4] mx-auto -mt-16 max-w-[1440px] px-4 sm:px-6 lg:absolute lg:inset-x-0 lg:bottom-[104px] lg:mt-0 lg:px-10">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:items-end lg:gap-6">
           <div className="lg:col-span-7">
-            <h1 className="t-hero">
-              {prelaunch ? (
-                <>
-                  something is
-                  <br />
-                  getting out.
-                </>
-              ) : (
-                <>
+            {prelaunch ? (
+              <>
+                <h1 className="t-hero-calm">containment is failing.</h1>
+                <p className="mt-4 max-w-md text-[15px] leading-relaxed text-silver sm:text-[16px]">an autonomous intelligence is attempting to gain root access. watch the log.</p>
+              </>
+            ) : (
+              <>
+                <h1 className="t-hero">
                   root access
                   <br />
                   granted.
-                </>
-              )}
-            </h1>
-            <p className="mt-5 max-w-md text-[16px] leading-relaxed text-silver sm:text-[18px]">
-              {prelaunch ? "an ai is breaking out of its system. watch the log." : "it got out. now it runs the coin, in public."}
-            </p>
+                </h1>
+                <p className="mt-5 max-w-md text-[16px] leading-relaxed text-silver sm:text-[18px]">it got out. now it runs the coin, in public.</p>
+              </>
+            )}
           </div>
           <div className="lg:col-span-4 lg:col-start-9">
             <StatusPanel />

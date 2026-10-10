@@ -127,9 +127,16 @@ async function main() {
     need("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET");
     const { TwitterApi } = await import("twitter-api-v2");
     const c = new TwitterApi({ appKey: env.X_API_KEY!, appSecret: env.X_API_SECRET!, accessToken: env.X_ACCESS_TOKEN!, accessSecret: env.X_ACCESS_SECRET! });
-    const u = await c.v2.me();
+    const full = await c.v2.get<{ data: { id: string; username: string } }>("users/me", undefined, { fullResponse: true });
+    const u = full.data;
     xId = u.data.id;
-    const res = `@${u.data.username} · id ${u.data.id}`;
+    // X reports the token's permission on every OAuth 1.0a response. Tokens generated before the app was switched to
+    // "Read and write" stay read-only and every post fails with 403, so check it here without posting anything.
+    const level = String(full.headers["x-access-level"] ?? "");
+    if (level && !level.includes("write"))
+      throw new Error(`@${u.data.username}: access token is "${level}" — cannot post. In the X developer portal set App permissions to "Read and write", then REGENERATE the Access Token & Secret and update X_ACCESS_TOKEN / X_ACCESS_SECRET.`);
+    const res = `@${u.data.username} · id ${u.data.id} · token ${level || "access level not reported (cannot confirm write)"}`;
+    if (!level) throw new Warn(res);
     if (env.X_BOT_USER_ID && env.X_BOT_USER_ID !== u.data.id) throw new Warn(`${res} — differs from X_BOT_USER_ID=${env.X_BOT_USER_ID} (app will use ${u.data.id})`);
     if (env.X_BOT_HANDLE && env.X_BOT_HANDLE.replace(/^@/, "").toLowerCase() !== u.data.username.toLowerCase()) throw new Warn(`${res} — differs from X_BOT_HANDLE=${env.X_BOT_HANDLE}`);
     return res;
