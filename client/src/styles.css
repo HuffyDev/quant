@@ -372,11 +372,38 @@ body {
     linear-gradient(180deg, rgb(0 0 0 / 0.65) 0%, transparent 18%, transparent 55%, rgb(0 0 0 / 0.85) 88%, #000 100%),
     radial-gradient(80% 70% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.6));
 }
-.static-brain {
-  filter: drop-shadow(0 0 40px rgb(var(--glow) / 0.35));
-  animation: breathe 7s var(--ease) infinite alternate;
+/* root.png as light, not a photo: no box or shadow (a drop-shadow on the opaque square drew a glowing frame),
+   screen blend, a radial mask that fades the square's edges to nothing, near-black crushed to pure black. */
+.brain-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: auto;
+  max-width: none;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  user-select: none;
+  mix-blend-mode: screen;
+  filter: contrast(1.15) brightness(1.04);
+  -webkit-mask-image: radial-gradient(closest-side, #000 64%, transparent 98%);
+  mask-image: radial-gradient(closest-side, #000 64%, transparent 98%);
+  opacity: 1;
+  transition: opacity 600ms var(--ease);
+  animation: brain-in 700ms var(--ease) backwards, breathe 7s var(--ease) 700ms infinite alternate;
 }
-@keyframes breathe { from { transform: scale(1); } to { transform: scale(1.015); } }
+.brain-img.is-dormant { filter: contrast(1.15) brightness(0.5); }
+/* the canvas fades in OVER the image (a true crossfade, no dip); the image goes only once fully covered */
+.brain-img.is-hidden { opacity: 0; transition: opacity 120ms linear 650ms; }
+@keyframes brain-in { from { opacity: 0; } }
+@keyframes breathe { from { scale: 1; } to { scale: 1.015; } }
+
+/* 3D canvas layer: invisible until the brain has rendered real frames, then a 600ms fade over the image */
+.brain-gl { position: absolute; inset: 0; opacity: 0; transition: opacity 600ms var(--ease); }
+.brain-gl.is-on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .brain-img { animation: none; }
+}
 
 .region-label {
   position: absolute;

@@ -5,7 +5,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Pin } from "@shared/pins";
 import { PIN_REGIONS } from "@shared/pins";
 import { buildBrain, type BrainCloud } from "../brain/cloud";
-import { BrainScene, TIERS, useAdaptiveTier, useOnScreen, type Tier } from "../brain/QuantumBrain";
+import { BrainScene, useOnScreen } from "../brain/QuantumBrain";
+import { TIERS, useAdaptiveTier, type Tier } from "../brain/quality";
+import { CORE_FOV, coreCameraDistance, MAX_DIST, MIN_DIST } from "./camera";
 import { REGION_INDEX } from "../brain/regions";
 import { clusterPins, hash32, type ScreenPin } from "./cluster";
 
@@ -17,8 +19,6 @@ import { clusterPins, hash32, type ScreenPin } from "./cluster";
  */
 
 const IDLE_MS = 4000;
-const MIN_DIST = 1.7;
-const MAX_DIST = 7;
 
 /** Surface point indices per pin region (BREACH = the crown, where it broke out). */
 function regionPoints(cloud: BrainCloud): number[][] {
@@ -59,11 +59,7 @@ function Controls({ fly, limited }: { fly: React.MutableRefObject<{ target: THRE
   const { camera, gl, size } = useThree();
   // frame the whole brain on any aspect (portrait phones need the camera further back)
   useEffect(() => {
-    const cam = camera as THREE.PerspectiveCamera;
-    const half = THREE.MathUtils.degToRad(cam.fov / 2);
-    const hHalf = Math.atan(Math.tan(half) * (size.width / size.height));
-    const dist = THREE.MathUtils.clamp(Math.max(1.25 / Math.tan(half), 1.2 / Math.tan(hHalf)), 3.2, MAX_DIST);
-    cam.position.setLength(dist);
+    camera.position.setLength(coreCameraDistance(size.width, size.height));
   }, [camera, size.width, size.height]);
   const controls = useMemo(() => {
     const c = new OrbitControls(camera, gl.domElement);
@@ -264,6 +260,7 @@ export default function CoreCanvas({
   active,
   startTier,
   onGiveUp,
+  onShown,
 }: {
   pins: Pin[];
   visible: boolean[];
@@ -274,6 +271,7 @@ export default function CoreCanvas({
   active: number[];
   startTier: Tier;
   onGiveUp: () => void;
+  onShown?: () => void;
 }) {
   const { tier, capped, onFps } = useAdaptiveTier(startTier, "high", onGiveUp);
   const [cloud, setCloud] = useState<BrainCloud | null>(null);
@@ -301,13 +299,13 @@ export default function CoreCanvas({
           flat
           frameloop={onScreen ? "always" : "never"}
           dpr={[1, TIERS[tier].dpr]}
-          camera={{ position: [0, 0.4, 3.6], fov: 45, near: 0.05, far: 30 }}
+          camera={{ position: [0, 0.4, 3.6], fov: CORE_FOV, near: 0.05, far: 30 }}
           gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
           onCreated={({ gl }) => gl.setClearColor(0x000000, 1)}
           style={{ position: "absolute", inset: 0, touchAction: "none" }}
         >
           <Controls fly={fly} limited={cloud.source === "image"} />
-          <BrainScene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} spin={0} tilt={[0, 0, 0]}>
+          <BrainScene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} onFail={onGiveUp} onShown={onShown} awake={onScreen} spin={0} tilt={[0, 0, 0]}>
             <group ref={group} />
           </BrainScene>
           <PinOverlay cloud={cloud} pins={pins} visible={visible} selectedId={selectedId} newSince={newSince} overlay={overlay} coarse={coarse} onSelect={onSelect} group={group} fly={fly} />

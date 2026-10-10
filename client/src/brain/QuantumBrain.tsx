@@ -7,21 +7,18 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { BRAIN_IMAGE_URL, buildBrain, type BrainCloud } from "./cloud";
 import { onPulse } from "../store";
+import { FpsSampler } from "./watchdog";
+import { BRAIN_FOV, TIERS, useAdaptiveTier, type Tier } from "./quality";
+
+export { BRAIN_FOV, initialTier, ORDER, TIERS, useAdaptiveTier, type Tier } from "./quality";
 
 /**
  * Quantum brain. Sampled from root.png (or a real brain.glb): luminous points sized by the image's brightness, the
  * image itself as a faint backplate, neural filaments with travelling signals, dust, bloom. Powers on node by node,
  * tilts toward the cursor, lights regions as capabilities unlock, pulses on live events, flashes red on a Guardian
- * rejection. Quality adapts to the device; the caller swaps in a static image if even the lowest tier can't hold up.
+ * rejection. Quality adapts to the device (see ./watchdog); the caller keeps root.png underneath and crossfades to the
+ * canvas once it has really rendered, and back to the image only if the renderer is truly failing.
  */
-
-export type Tier = "high" | "mid" | "low";
-export const TIERS: Record<Tier, { points: number; lines: number; bloom: number; dpr: number }> = {
-  high: { points: 42000, lines: 2200, bloom: 1, dpr: 1.75 },
-  mid: { points: 24000, lines: 1400, bloom: 0.75, dpr: 1.4 },
-  low: { points: 14000, lines: 800, bloom: 0, dpr: 1.25 },
-};
-export const ORDER: Tier[] = ["high", "mid", "low"];
 
 export interface LabelAnchor {
   update: (i: number, x: number, y: number, front: number) => void;
@@ -205,6 +202,9 @@ export function BrainScene({
   active,
   tier,
   onFps,
+  onFail,
+  onShown,
+  awake = true,
   labels,
   spin,
   tilt = [0, 0, 0],
@@ -216,7 +216,14 @@ export function BrainScene({
   level: number;
   active: number[];
   tier: Tier;
-  onFps: (fps: number) => void;
+  /** one closed measuring window (see FpsSampler) */
+  onFps: (fps: number, ms: number) => void;
+  /** the WebGL context was lost and not restored */
+  onFail?: () => void;
+  /** fired once the brain has rendered real frames and is mostly powered on: time to crossfade to the canvas */
+  onShown?: () => void;
+  /** false while the canvas is paused (off-screen / tab hidden); resuming restarts the watchdog warm-up */
+  awake?: boolean;
   labels?: LabelAnchor;
   /** rad/s around Y for a real model; a gentle sway for the front-facing image cloud */
   spin: number;
@@ -293,11 +300,11 @@ export function BrainScene({
     g.setAttribute("aT", new THREE.BufferAttribute(l.t.subarray(0, l.count * 2), 1));
     return g;
   }, [cloud]);
-  const dustGeo = useMemo(() => dustGeometry(tier === "low" ? 140 : 360), [tier]);
+  const dustGeo = useMemo(() => dustGeometry(tier === "low" || tier === "min" ? 140 : 360), [tier]);
 
   useEffect(() => {
     // additive blending: more points must each be dimmer, or dense tiers wash out to white
-    shared.uDensity.value = Math.min(1, Math.sqrt(TIERS.low.points / cfg.points));
+    shared.uDensity.value = Math.min(1.4, Math.sqrt(TIERS.low.points / cfg.points));
     shared.uGain.value = cfg.bloom ? 1 : 1.6;
     pointsGeo.setDrawRange(0, Math.min(cloud.count, cfg.points));
     linesGeo.setDrawRange(0, Math.min(cloud.lines.count, cfg.lines) * 2);
@@ -335,7 +342,31 @@ export function BrainScene({
     if (interactive) bindPointer();
   }, [interactive]);
 
-  const fps = useRef({ n: 0, t0: 0, warm: 0 });
+  const sampler = useMemo(() => new FpsSampler(), []);
+  // a quality change or a resume gets a fresh warm-up before anything is measured
+  useEffect(() => {
+    if (awake) sampler.reset(performance.now());
+  }, [tier, awake, sampler]);
+  const shown = useRef({ frames: 0, done: false });
+
+  // a lost context that isn't restored within 3s is a renderer that is truly failing
+  useEffect(() => {
+    const el = gl.domElement;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const lost = (e: Event) => {
+      e.preventDefault();
+      console.warn("[brain] WebGL context lost");
+      t = setTimeout(() => onFail?.(), 3000);
+    };
+    const restored = () => clearTimeout(t);
+    el.addEventListener("webglcontextlost", lost);
+    el.addEventListener("webglcontextrestored", restored);
+    return () => {
+      clearTimeout(t);
+      el.removeEventListener("webglcontextlost", lost);
+      el.removeEventListener("webglcontextrestored", restored);
+    };
+  }, [gl, onFail]);
   const tmp = useMemo(() => new THREE.Vector3(), []);
   const frame = useRef(0);
   const image = cloud.source === "image";
@@ -374,21 +405,16 @@ export function BrainScene({
       }
     }
 
-    // FPS watchdog: 2s windows after a 2.5s warm-up (covers power-on)
-    const f = fps.current;
-    const now = performance.now();
-    if (!f.warm) f.warm = now + 2500;
-    if (now >= f.warm) {
-      if (!f.t0) f.t0 = now;
-      f.n++;
-      if (now - f.t0 > 2000) {
-        onFps((f.n * 1000) / (now - f.t0));
-        f.n = 0;
-        f.t0 = now;
-      }
-    }
+    const w = sampler.frame(performance.now());
+    if (w) onFps(w.fps, w.ms);
     if (composer) composer.render(dt);
     else gl.render(scene, camera);
+    // a few real frames on screen and mostly powered on: the caller may crossfade from the image
+    const s = shown.current;
+    if (!s.done && ++s.frames >= 3 && shared.uBoot.value >= 0.85) {
+      s.done = true;
+      onShown?.();
+    }
   }, 1);
 
   const plate = cloud.plate;
@@ -406,53 +432,6 @@ export function BrainScene({
       {children}
     </group>
   );
-}
-
-/** Starting quality. `?quality=high|mid|low|static` overrides detection (e.g. to pin it on the OBS machine). */
-export function initialTier(): Tier | null {
-  try {
-    const forced = new URLSearchParams(location.search).get("quality");
-    if (forced === "static") return null;
-    if (forced === "high" || forced === "mid" || forced === "low") return forced;
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
-    const c = document.createElement("canvas");
-    if (!(c.getContext("webgl2") || c.getContext("webgl"))) return null;
-    const nav = navigator as Navigator & { deviceMemory?: number };
-    const cores = nav.hardwareConcurrency ?? 4;
-    const mem = nav.deviceMemory ?? 4;
-    if (cores <= 2 || mem <= 1) return null;
-    const mobile = matchMedia("(max-width: 768px), (pointer: coarse)").matches;
-    if (mobile || cores <= 4 || mem <= 2) return "low";
-    return cores >= 8 ? "high" : "mid";
-  } catch {
-    return null;
-  }
-}
-
-/** Adaptive quality: drops a tier after sustained <50fps; calls onGiveUp below ~28fps on the lowest tier. */
-export function useAdaptiveTier(startTier: Tier, maxTier: Tier, onGiveUp: () => void) {
-  const pinned = new URLSearchParams(location.search).has("quality");
-  const capped = ORDER[Math.max(ORDER.indexOf(startTier), ORDER.indexOf(maxTier))];
-  const [tier, setTier] = useState<Tier>(capped);
-  const slow = useRef(0);
-  const onFps = (fps: number) => {
-    if (pinned) return; // operator pinned the quality: never downgrade
-    if (fps >= 50) {
-      slow.current = 0;
-      return;
-    }
-    if (++slow.current < 2 && fps >= 30) return; // one slow window can be a hiccup
-    slow.current = 0;
-    const i = ORDER.indexOf(tier);
-    if (i < ORDER.length - 1) {
-      console.info(`[brain] ${fps.toFixed(0)} fps — quality ${tier} → ${ORDER[i + 1]}`);
-      setTier(ORDER[i + 1]);
-    } else if (fps < 28) {
-      console.info(`[brain] ${fps.toFixed(0)} fps on the lowest quality — static fallback`);
-      onGiveUp();
-    }
-  };
-  return { tier, capped, onFps };
 }
 
 /** Pause rendering while the element is off-screen or the tab is hidden. */
@@ -481,7 +460,8 @@ export function useOnScreen(ref: React.RefObject<HTMLElement | null>) {
 }
 
 /**
- * The canvas. `onGiveUp` fires if the lowest tier can't hold ~30fps (caller shows the static fallback).
+ * The canvas. Mount it over a <BrainImage>: it stays transparent (opacity 0) until `onShown`, then the caller
+ * crossfades. `onGiveUp` fires only if the renderer is truly failing (caller keeps/returns to the image).
  * Rendering pauses while the canvas is off-screen.
  */
 export default function QuantumBrain({
@@ -489,18 +469,19 @@ export default function QuantumBrain({
   active,
   startTier,
   onGiveUp,
+  onShown,
   labels,
   spin = 0.12,
   maxTier = "high",
   distance = 3.2,
   interactive = false,
   bootAt,
-  onReady,
 }: {
   level: number;
   active: number[];
   startTier: Tier;
   onGiveUp: () => void;
+  onShown?: () => void;
   labels?: LabelAnchor;
   spin?: number;
   maxTier?: Tier;
@@ -508,7 +489,6 @@ export default function QuantumBrain({
   distance?: number;
   interactive?: boolean;
   bootAt?: number;
-  onReady?: () => void;
 }) {
   const { tier, capped, onFps } = useAdaptiveTier(startTier, maxTier, onGiveUp);
   const [cloud, setCloud] = useState<BrainCloud | null>(null);
@@ -519,16 +499,11 @@ export default function QuantumBrain({
     let alive = true;
     // build once at the starting tier's size; lower tiers draw a prefix
     buildBrain(TIERS[capped].points, TIERS[capped].lines)
-      .then((c) => {
-        if (!alive) return;
-        setCloud(c);
-        onReady?.();
-      })
+      .then((c) => alive && setCloud(c))
       .catch(onGiveUp);
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [capped, onGiveUp]);
 
   return (
@@ -538,12 +513,12 @@ export default function QuantumBrain({
           frameloop={visible ? "always" : "never"}
           flat
           dpr={[1, TIERS[tier].dpr]}
-          camera={{ position: [0, 0, distance], fov: 40, near: 0.1, far: 20 }}
+          camera={{ position: [0, 0, distance], fov: BRAIN_FOV, near: 0.1, far: 20 }}
           gl={{ antialias: false, alpha: false, powerPreference: "high-performance" }}
           onCreated={({ gl }) => gl.setClearColor(0x000000, 1)}
           style={{ position: "absolute", inset: 0 }}
         >
-          <BrainScene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} labels={labels} spin={spin} interactive={interactive} bootAt={bootAt} />
+          <BrainScene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} onFail={onGiveUp} onShown={onShown} awake={visible} labels={labels} spin={spin} interactive={interactive} bootAt={bootAt} />
         </Canvas>
       )}
     </div>

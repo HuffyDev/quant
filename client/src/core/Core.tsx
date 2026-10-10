@@ -1,7 +1,10 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PIN_GROUPS, PIN_LABEL, pinFromEvent, proofLabel, type Pin } from "@shared/pins";
 import { useStore } from "../store";
-import { initialTier } from "../brain/QuantumBrain";
+import { initialTier } from "../brain/quality";
+import { BrainImage, imageScale } from "../brain/BrainImage";
+import { GLBoundary } from "../brain/BrainStage";
+import { CORE_FOV, coreCameraDistance } from "./camera";
 import { regionActivity } from "../brain/regions";
 import { toReal } from "../format";
 import { SourceBadge } from "../components/Terminal";
@@ -15,16 +18,6 @@ const CoreCanvas = lazy(() => import("./CoreCanvas"));
  * Without WebGL (or on a device that can't hold the frame rate) it becomes a filterable list.
  */
 
-class GLBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
 const GROUP_OF = new Map(PIN_GROUPS.flatMap((g) => g.kinds.map((k) => [k, g.key] as const)));
 const DEFAULT_GROUPS = new Set(PIN_GROUPS.filter((g) => g.key !== "system").map((g) => g.key));
 
@@ -37,6 +30,18 @@ function fmtAge(ageS: number | null): string {
   return h ? `T+${h}h ${String(m).padStart(2, "0")}m` : `T+${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 const fmtStamp = (iso: string) => new Date(iso).toLocaleString([], { hour12: false, month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+/** the core stage is the full viewport */
+function useViewport() {
+  const read = () => ({ w: window.innerWidth, h: window.innerHeight });
+  const [vw, setVw] = useState(read);
+  useEffect(() => {
+    const on = () => setVw(read());
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return vw;
+}
 
 function usePins() {
   const [pins, setPins] = useState<Pin[]>([]);
@@ -231,6 +236,9 @@ export default function Core() {
   const [gaveUp, setGaveUp] = useState(false);
   const giveUp = useCallback(() => setGaveUp(true), []);
   const use3D = start !== null && !gaveUp;
+  const [shownCanvas, setShownCanvas] = useState(false);
+  const vw = useViewport();
+  const show = useCallback(() => setShownCanvas(true), []);
 
   useEffect(() => {
     document.title = "QUANTUM CORE · ROOT";
@@ -293,15 +301,23 @@ export default function Core() {
 
       <main className="core-stage">
         {use3D ? (
-          <GLBoundary fallback={<div className="absolute inset-0 flex flex-col pt-16 pb-[84px]"><PinList pins={shown} onSelect={setSelectedId} /></div>}>
-            <Suspense fallback={<div className="t-label grid h-full place-items-center">loading core…</div>}>
-              <CoreCanvas pins={pins} visible={visible} selectedId={selectedId} newSince={newSince} onSelect={setSelectedId} level={prelaunch ? 0.3 : (state?.brainLevel ?? 0.5)} active={active} startTier={start} onGiveUp={giveUp} />
-            </Suspense>
-          </GLBoundary>
+          <>
+            {/* the image holds the stage while the 3D core loads, then the canvas fades in over it */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <BrainImage scale={imageScale(coreCameraDistance(vw.w, vw.h), CORE_FOV)} dormant={prelaunch} hidden={shownCanvas} />
+            </div>
+            <GLBoundary fallback={null} onFail={giveUp}>
+              <div className={`brain-gl ${shownCanvas ? "is-on" : ""}`}>
+                <Suspense fallback={null}>
+                  <CoreCanvas pins={pins} visible={visible} selectedId={selectedId} newSince={newSince} onSelect={setSelectedId} level={prelaunch ? 0.3 : (state?.brainLevel ?? 0.5)} active={active} startTier={start} onGiveUp={giveUp} onShown={show} />
+                </Suspense>
+              </div>
+            </GLBoundary>
+          </>
         ) : (
           <div className="absolute inset-0 flex flex-col pt-16 pb-[84px]">
-            <div className="relative h-[26vh] shrink-0">
-              <img src="/root.png" alt="ROOT" className="static-brain mx-auto h-full w-auto object-contain" />
+            <div className="relative h-[26vh] shrink-0 overflow-hidden">
+              <BrainImage scale={1.5} dormant={prelaunch} />
             </div>
             <PinList pins={shown} onSelect={setSelectedId} />
           </div>

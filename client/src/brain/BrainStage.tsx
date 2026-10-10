@@ -1,27 +1,23 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Capability } from "@shared/types";
 import { REGIONS, regionActivity } from "./regions";
-import { initialTier, type LabelAnchor } from "./QuantumBrain";
+import { initialTier } from "./quality";
+import type { LabelAnchor } from "./QuantumBrain";
+import { BrainImage, imageScale } from "./BrainImage";
 
 const QuantumBrain = lazy(() => import("./QuantumBrain"));
 
-class GLBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+export class GLBoundary extends Component<{ fallback: ReactNode; children: ReactNode; onFail?: () => void }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
   }
+  componentDidCatch() {
+    this.props.onFail?.();
+  }
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;
   }
-}
-
-/** Static fallback: no WebGL, reduced motion, or a device that can't hold the frame rate. */
-export function StaticBrain({ dormant, className = "h-[78%]" }: { dormant: boolean; className?: string }) {
-  return (
-    <div className="absolute inset-0 grid place-items-center">
-      <img src="/root.png" alt="ROOT — a glowing translucent brain" className={`static-brain w-auto object-contain ${className} ${dormant ? "opacity-45" : ""}`} />
-    </div>
-  );
 }
 
 /**
@@ -44,6 +40,8 @@ export function BrainStage({
   const start = useMemo(initialTier, []);
   const [gaveUp, setGaveUp] = useState(false);
   const giveUp = useCallback(() => setGaveUp(true), []);
+  const [shown, setShown] = useState(false);
+  const show = useCallback(() => setShown(true), []);
   const active = regionActivity(capabilities);
   const activeKey = active.join("");
   const stableActive = useMemo(() => active, [activeKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -79,16 +77,18 @@ export function BrainStage({
 
   return (
     <div ref={stage} className="absolute inset-0 overflow-hidden bg-black">
-      {use3D && powerAt !== null ? (
-        <GLBoundary fallback={<StaticBrain dormant={dormant} />}>
-          <Suspense fallback={null}>
-            <QuantumBrain level={dormant ? 0.15 : Math.max(0.35, brainLevel)} active={stableActive} startTier={start} onGiveUp={giveUp} labels={labels} distance={distance} spin={0.05} interactive bootAt={powerAt} />
-          </Suspense>
+      {/* the image is always underneath: static fallback, and what shows while the 3D brain loads */}
+      {(!use3D || powerAt !== null) && <BrainImage scale={imageScale(distance)} dormant={dormant} hidden={use3D && shown} />}
+      {use3D && powerAt !== null && (
+        <GLBoundary fallback={null} onFail={giveUp}>
+          <div className={`brain-gl ${shown ? "is-on" : ""}`}>
+            <Suspense fallback={null}>
+              <QuantumBrain level={dormant ? 0.15 : Math.max(0.35, brainLevel)} active={stableActive} startTier={start} onGiveUp={giveUp} onShown={show} labels={labels} distance={distance} spin={0.05} interactive bootAt={powerAt} />
+            </Suspense>
+          </div>
         </GLBoundary>
-      ) : !use3D ? (
-        <StaticBrain dormant={dormant} />
-      ) : null}
-      {use3D && (
+      )}
+      {use3D && shown && (
         <div className="pointer-events-none absolute inset-0 z-[2] hidden lg:block" aria-hidden>
           {REGIONS.map((r, i) => (
             <div

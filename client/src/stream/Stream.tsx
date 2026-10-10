@@ -3,8 +3,9 @@ import { enableChatFeed, useStore } from "../store";
 import { useAge, realSeconds } from "../hooks";
 import { fmtUsd, timeOf } from "../format";
 import { regionActivity } from "../brain/regions";
-import { initialTier } from "../brain/QuantumBrain";
-import { StaticBrain } from "../brain/BrainStage";
+import { initialTier } from "../brain/quality";
+import { GLBoundary } from "../brain/BrainStage";
+import { BrainImage, imageScale } from "../brain/BrainImage";
 import { lineOpacity, monitorTransform, parseStreamParams, streamQuery, type StreamParams } from "./params";
 import { scheduleFeed, typingEndsAt, visibleChars, type FeedLine } from "./feed";
 
@@ -126,16 +127,22 @@ function MiniBrain() {
   const start = useMemo(initialTier, []);
   const [gaveUp, setGaveUp] = useState(false);
   const giveUp = useCallback(() => setGaveUp(true), []);
+  const [shown, setShown] = useState(false);
+  const show = useCallback(() => setShown(true), []);
+  const use3D = !!start && !gaveUp;
   const key = regionActivity(caps).join("");
   const active = useMemo(() => regionActivity(caps), [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="relative h-[240px] w-full overflow-hidden rounded-[12px] border border-glow/15 bg-black">
-      {start && !gaveUp ? (
-        <Suspense fallback={null}>
-          <QuantumBrain level={dormant ? 0.04 : level} active={active} startTier={start} maxTier="mid" onGiveUp={giveUp} spin={0.2} />
-        </Suspense>
-      ) : (
-        <StaticBrain dormant={dormant} />
+      <BrainImage scale={imageScale(3.2)} dormant={dormant} hidden={use3D && shown} />
+      {use3D && start && (
+        <GLBoundary fallback={null} onFail={giveUp}>
+          <div className={`brain-gl ${shown ? "is-on" : ""}`}>
+            <Suspense fallback={null}>
+              <QuantumBrain level={dormant ? 0.04 : level} active={active} startTier={start} maxTier="mid" onGiveUp={giveUp} onShown={show} spin={0.2} />
+            </Suspense>
+          </div>
+        </GLBoundary>
       )}
     </div>
   );
