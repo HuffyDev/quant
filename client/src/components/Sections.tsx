@@ -80,14 +80,14 @@ export function Subsystems() {
     <Module index="03" title="Subsystems" meta={`${state.anatomy.filter((a) => a.active).length}/${state.anatomy.length} subsystems online`}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {state.anatomy.map((a) => (
-          <Organ key={a.key} a={a} until={a.unlockAt !== null && age !== null ? realSeconds(a.unlockAt - Math.max(0, age), state.simSpeed) : null} caps={state.capabilities} />
+          <Subsystem key={a.key} a={a} until={a.unlockAt !== null && age !== null ? realSeconds(a.unlockAt - Math.max(0, age), state.simSpeed) : null} caps={state.capabilities} />
         ))}
       </div>
     </Module>
   );
 }
 
-function Organ({ a, until, caps }: { a: AnatomyPart; until: number | null; caps: Record<string, boolean> }) {
+function Subsystem({ a, until, caps }: { a: AnatomyPart; until: number | null; caps: Record<string, boolean> }) {
   const partial = !a.active && !!a.partial;
   return (
     <div className={`panel relative overflow-hidden px-4 py-4 transition ${a.active ? "border-white/35 shadow-[0_0_40px_-18px_rgba(255,255,255,0.5)]" : partial ? "border-white/20" : "stripes"}`}>

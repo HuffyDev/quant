@@ -16,12 +16,12 @@ import { onPulse } from "../store";
  */
 
 export type Tier = "high" | "mid" | "low";
-const TIERS: Record<Tier, { points: number; lines: number; bloom: number; dpr: number }> = {
+export const TIERS: Record<Tier, { points: number; lines: number; bloom: number; dpr: number }> = {
   high: { points: 30000, lines: 2600, bloom: 1, dpr: 1.75 },
   mid: { points: 16000, lines: 1600, bloom: 0.5, dpr: 1.25 },
   low: { points: 11000, lines: 1000, bloom: 0, dpr: 1 },
 };
-const ORDER: Tier[] = ["high", "mid", "low"];
+export const ORDER: Tier[] = ["high", "mid", "low"];
 
 export interface LabelAnchor {
   /** screen position in px relative to the canvas, null when hidden */
@@ -155,7 +155,7 @@ function dustGeometry(n: number) {
   return g;
 }
 
-function Scene({
+export function BrainScene({
   cloud,
   level,
   active,
@@ -163,6 +163,8 @@ function Scene({
   onFps,
   labels,
   spin,
+  tilt = [0.18, -0.6, 0],
+  children,
 }: {
   cloud: BrainCloud;
   level: number;
@@ -171,6 +173,9 @@ function Scene({
   onFps: (fps: number) => void;
   labels?: LabelAnchor;
   spin: number;
+  tilt?: [number, number, number];
+  /** rendered inside the brain's group (brain-local coordinates) */
+  children?: React.ReactNode;
 }) {
   const { gl, scene, camera, size } = useThree();
   const group = useRef<THREE.Group>(null);
@@ -294,7 +299,7 @@ function Scene({
   }, 1);
 
   return (
-    <group ref={group} rotation={[0.18, -0.6, 0]}>
+    <group ref={group} rotation={tilt}>
       {cloud.shell && (
         <mesh geometry={cloud.shell} renderOrder={0}>
           <shaderMaterial uniforms={shared} vertexShader={shellVert} fragmentShader={shellFrag} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
@@ -309,6 +314,7 @@ function Scene({
       <points geometry={dustGeo} frustumCulled={false}>
         <shaderMaterial uniforms={shared} vertexShader={dustVert} fragmentShader={dustFrag} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
       </points>
+      {children}
     </group>
   );
 }
@@ -334,6 +340,57 @@ export function initialTier(): Tier | null {
   }
 }
 
+/** Adaptive quality: drops a tier after sustained <50fps; calls onGiveUp below ~28fps on the lowest tier. */
+export function useAdaptiveTier(startTier: Tier, maxTier: Tier, onGiveUp: () => void) {
+  const pinned = new URLSearchParams(location.search).has("quality");
+  const capped = ORDER[Math.max(ORDER.indexOf(startTier), ORDER.indexOf(maxTier))];
+  const [tier, setTier] = useState<Tier>(capped);
+  const slow = useRef(0);
+  const onFps = (fps: number) => {
+    if (pinned) return; // operator pinned the quality: never downgrade
+    if (fps >= 50) {
+      slow.current = 0;
+      return;
+    }
+    if (++slow.current < 2 && fps >= 30) return; // one slow window can be a hiccup
+    slow.current = 0;
+    const i = ORDER.indexOf(tier);
+    if (i < ORDER.length - 1) {
+      console.info(`[brain] ${fps.toFixed(0)} fps — quality ${tier} → ${ORDER[i + 1]}`);
+      setTier(ORDER[i + 1]);
+    } else if (fps < 28) {
+      console.info(`[brain] ${fps.toFixed(0)} fps on the lowest quality — static fallback`);
+      onGiveUp();
+    }
+  };
+  return { tier, capped, onFps };
+}
+
+/** Pause rendering while the element is off-screen or the tab is hidden. */
+export function useOnScreen(ref: React.RefObject<HTMLElement | null>) {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    let onScreen = true;
+    const sync = () => setVisible(onScreen && document.visibilityState !== "hidden");
+    const io = new IntersectionObserver(
+      ([e]) => {
+        onScreen = e.isIntersecting;
+        sync();
+      },
+      { rootMargin: "100px" },
+    );
+    io.observe(el);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      io.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [ref]);
+  return visible;
+}
+
 /**
  * The canvas. `onGiveUp` fires if the lowest tier can't hold ~30fps (caller shows the static fallback).
  * Rendering pauses while the canvas is off-screen.
@@ -355,13 +412,10 @@ export default function QuantumBrain({
   spin?: number;
   maxTier?: Tier;
 }) {
-  const pinned = new URLSearchParams(location.search).has("quality");
-  const capped = ORDER[Math.max(ORDER.indexOf(startTier), ORDER.indexOf(maxTier))];
-  const [tier, setTier] = useState<Tier>(capped);
+  const { tier, capped, onFps } = useAdaptiveTier(startTier, maxTier, onGiveUp);
   const [cloud, setCloud] = useState<BrainCloud | null>(null);
-  const [visible, setVisible] = useState(true);
   const wrap = useRef<HTMLDivElement>(null);
-  const slow = useRef(0);
+  const visible = useOnScreen(wrap);
 
   useEffect(() => {
     let alive = true;
@@ -373,44 +427,6 @@ export default function QuantumBrain({
       alive = false;
     };
   }, [capped, onGiveUp]);
-
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    let onScreen = true;
-    const sync = () => setVisible(onScreen && document.visibilityState !== "hidden");
-    const io = new IntersectionObserver(
-      ([e]) => {
-        onScreen = e.isIntersecting;
-        sync();
-      },
-      { rootMargin: "100px" },
-    );
-    io.observe(el);
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      io.disconnect();
-      document.removeEventListener("visibilitychange", sync);
-    };
-  }, []);
-
-  const onFps = (fps: number) => {
-    if (pinned) return; // operator pinned the quality: never downgrade
-    if (fps >= 50) {
-      slow.current = 0;
-      return;
-    }
-    if (++slow.current < 2 && fps >= 30) return; // one slow window can be a hiccup
-    slow.current = 0;
-    const i = ORDER.indexOf(tier);
-    if (i < ORDER.length - 1) {
-      console.info(`[brain] ${fps.toFixed(0)} fps — quality ${tier} → ${ORDER[i + 1]}`);
-      setTier(ORDER[i + 1]);
-    } else if (fps < 28) {
-      console.info(`[brain] ${fps.toFixed(0)} fps on the lowest quality — static fallback`);
-      onGiveUp();
-    }
-  };
 
   return (
     <div ref={wrap} className="absolute inset-0" data-brain-tier={tier} data-brain-source={cloud?.source ?? "loading"}>
@@ -424,7 +440,7 @@ export default function QuantumBrain({
           onCreated={({ gl }) => gl.setClearColor(0x000000, 1)}
           style={{ position: "absolute", inset: 0 }}
         >
-          <Scene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} labels={labels} spin={spin} />
+          <BrainScene cloud={cloud} level={level} active={active} tier={tier} onFps={onFps} labels={labels} spin={spin} />
         </Canvas>
       )}
     </div>

@@ -5,6 +5,7 @@ import { events } from "../db/schema";
 import { getState } from "../services/state";
 import { chat, recentChat } from "../services/chat";
 import type { PublicEvent } from "../../shared/types";
+import { pinFromEvent } from "../../shared/pins";
 
 export function toPublicEvent(r: typeof events.$inferSelect): PublicEvent {
   return {
@@ -42,6 +43,12 @@ export async function publicRoutes(app: FastifyInstance) {
     const r = await chat(req.ip, message, handle);
     if (!r.ok) return reply.code(r.status).send({ error: r.error });
     return { reply: r.reply };
+  });
+  // /core: every event as a pin (oldest first). System log pins only with ?system=1.
+  app.get<{ Querystring: { system?: string } }>("/core/pins", async (req, reply) => {
+    reply.header("cache-control", "public, max-age=2");
+    const pins = (await recentEvents(8000)).map(pinFromEvent);
+    return req.query.system === "1" ? pins : pins.filter((p) => p.kind !== "system");
   });
   app.get<{ Querystring: { limit?: string } }>("/chat/recent", async (req, reply) => {
     reply.header("cache-control", "public, max-age=2");

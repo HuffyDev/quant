@@ -8,9 +8,11 @@ import { Admin } from "./components/Admin";
 import { Icon } from "./components/ui";
 
 const Stream = lazy(() => import("./stream/Stream"));
+const Core = lazy(() => import("./core/Core"));
 
 const NAV: [string, string][] = [
   ["Root", "#brain"],
+  ["Quantum core", "/core"],
   ["Chat", "#chat"],
   ["Activity", "#activity"],
   ["Actions", "#actions"],
@@ -114,6 +116,12 @@ function Header() {
 
 export function App() {
   if (location.pathname.startsWith("/admin")) return <Admin />;
+  if (location.pathname.startsWith("/core"))
+    return (
+      <Suspense fallback={null}>
+        <Core />
+      </Suspense>
+    );
   if (location.pathname.startsWith("/stream"))
     return (
       <Suspense fallback={null}>

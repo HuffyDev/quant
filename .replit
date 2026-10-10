@@ -1,5 +1,5 @@
-# Baby Brain — Replit config
-# Run builds the frontend, then starts the single server process (web + engine + pollers + autonomy loop).
+# ROOT — Replit config
+# Run builds the frontend, then starts the single server process (web + engine + arc scheduler + pollers + autonomy loop).
 # The database migrates itself on boot; no separate DB step is needed.
 modules = ["nodejs-22"]
 run = "npm run build && npm start"
@@ -12,7 +12,7 @@ localPort = 5000
 externalPort = 80
 
 [deployment]
-# Always-on Reserved VM: the development engine, pollers and websockets must run continuously.
+# Always-on Reserved VM: the timeline engine, arc scheduler, pollers and websockets must run continuously.
 deploymentTarget = "vm"
 build = ["npm", "run", "build"]
 run = ["npm", "start"]

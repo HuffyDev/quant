@@ -13,6 +13,8 @@ export interface BrainCloud {
   positions: Float32Array;
   region: Float32Array;
   seed: Float32Array;
+  /** 1 = interior point (not on the surface) */
+  inner: Uint8Array;
   count: number;
   /** neural filaments: 2 vertices per segment */
   lines: { positions: Float32Array; region: Float32Array; seed: Float32Array; t: Float32Array; count: number };
@@ -153,5 +155,5 @@ export async function buildBrain(count: number, maxLines: number, opts: { model?
   // memory sits in the core: put its label anchor at the centre-bottom of the core
   centroids[2] = new THREE.Vector3(0, -0.05, 0.05);
 
-  return { positions: P, region, seed, count, lines: buildLines(P, region, Math.min(count, 9000), maxLines, 5), shell, centroids, source };
+  return { positions: P, region, seed, inner: I, count, lines: buildLines(P, region, Math.min(count, 9000), maxLines, 5), shell, centroids, source };
 }

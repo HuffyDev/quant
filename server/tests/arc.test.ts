@@ -64,3 +64,31 @@ describe("fiction guard", () => {
     "i only touch my own treasury",
   ])("allows %s", (t) => expect(filterPublicText(t).ok).toBe(true));
 });
+
+describe("/core pins", async () => {
+  const { pinFromEvent, proofLabel } = await import("../../shared/pins");
+  const ev = (type: string, source: string, data: Record<string, unknown> | null = null, message = "m", proofUrl: string | null = null) =>
+    ({ id: 1, ts: "2026-10-10T00:00:00Z", ageS: 60, type, source, message, data, proofUrl }) as Parameters<typeof pinFromEvent>[0];
+  it.each([
+    [ev("ARC", "ROOT"), "arc", "BREACH"],
+    [ev("BOOT", "ROOT"), "arc", "BREACH"],
+    [ev("SOCIAL", "SYSTEM", { postId: "1", text: "t" }), "x_post", "SOCIAL"],
+    [ev("SOCIAL", "SYSTEM", { postId: "1", mentionId: "2", text: "t" }), "x_reply", "SOCIAL"],
+    [ev("ACTION", "SYSTEM", { sig: "abc" }), "buyback", "TREASURY"],
+    [ev("MEMORY", "ROOT"), "memory", "MEMORY"],
+    [ev("DECISION", "ROOT", { proposalId: 3 }), "proposal", "DECISIONS"],
+    [ev("MARKET", "ROOT"), "market", "MARKET"],
+    [ev("GUARDIAN", "GUARDIAN", { approved: false }), "guardian_reject", "DECISIONS"],
+    [ev("LEARN", "ROOT"), "language", "LANGUAGE"],
+    [ev("WARNING", "SYSTEM"), "system", "MEMORY"],
+  ])("maps %#", (e, kind, region) => {
+    const p = pinFromEvent(e);
+    expect([p.kind, p.region]).toEqual([kind, region]);
+    expect(p.red).toBe(kind === "guardian_reject");
+  });
+  it("uses the post text and labels proof links", () => {
+    expect(pinFromEvent(ev("SOCIAL", "SYSTEM", { postId: "1", text: "hello" }, "posted to X")).content).toBe("hello");
+    expect(proofLabel("https://x.com/root/status/1")).toBe("View on X");
+    expect(proofLabel("https://solscan.io/tx/abc")).toBe("View on Solscan");
+  });
+});

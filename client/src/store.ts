@@ -20,7 +20,7 @@ interface Store {
   receivedAt: number;
   events: PublicEvent[];
   connected: boolean;
-  /** last capability unlock seen live (drives growth bursts) */
+  /** last capability unlock seen live */
   lastUnlock: { at: number; caps: string[] } | null;
   /** web chat feed (only filled after enableChatFeed()) */
   chat: ChatLine[];
